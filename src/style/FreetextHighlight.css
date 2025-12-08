@@ -1,0 +1,176 @@
+.FreetextHighlight {
+  position: absolute;
+}
+
+.FreetextHighlight__container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  transition: box-shadow 0.2s ease;
+}
+
+.FreetextHighlight__container:hover {
+  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.FreetextHighlight__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.FreetextHighlight__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  cursor: grab;
+  user-select: none;
+  color: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.FreetextHighlight__drag-handle:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.FreetextHighlight__drag-handle:active {
+  cursor: grabbing;
+}
+
+.FreetextHighlight__edit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  padding: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.FreetextHighlight__edit-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.FreetextHighlight__content {
+  flex: 1;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.FreetextHighlight__text {
+  width: 100%;
+  height: 100%;
+  cursor: text;
+  overflow: auto;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.FreetextHighlight__input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  resize: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+}
+
+.FreetextHighlight--scrolledTo .FreetextHighlight__container {
+  box-shadow: 0 0 0 3px #ff4141, 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.FreetextHighlight--editing .FreetextHighlight__container {
+  box-shadow: 0 0 0 2px #4a90d9, 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.FreetextHighlight__style-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.5);
+  border-radius: 3px;
+  padding: 0;
+  transition: background 0.2s, color 0.2s;
+}
+
+.FreetextHighlight__style-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.FreetextHighlight__style-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  z-index: 1000;
+  margin-top: 2px;
+}
+
+.FreetextHighlight__style-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.FreetextHighlight__style-row:last-child {
+  margin-bottom: 0;
+}
+
+.FreetextHighlight__style-row label {
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.FreetextHighlight__style-row input[type="color"] {
+  width: 28px;
+  height: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.FreetextHighlight__style-row select {
+  padding: 4px 6px;
+  font-size: 11px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  background: white;
+  cursor: pointer;
+  min-width: 80px;
+}

@@ -5,9 +5,11 @@ import "./style/Toolbar.css";
 interface ToolbarProps {
   setPdfScaleValue: (value: number) => void;
   toggleHighlightPen: () => void;
+  toggleFreetextMode: () => void;
+  isFreetextMode: boolean;
 }
 
-const Toolbar = ({ setPdfScaleValue, toggleHighlightPen }: ToolbarProps) => {
+const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isFreetextMode }: ToolbarProps) => {
   const [zoom, setZoom] = useState<number | null>(null);
   const [isHighlightPen, setIsHighlightPen] = useState<boolean>(false);
 
@@ -46,6 +48,13 @@ const Toolbar = ({ setPdfScaleValue, toggleHighlightPen }: ToolbarProps) => {
         toggleHighlightPen();
         setIsHighlightPen(!isHighlightPen);
       }}>Toggle Highlights</button>
+      <button
+        title="Add Note"
+        className={`FreetextButton ${isFreetextMode ? 'active' : ''}`}
+        onClick={toggleFreetextMode}
+      >
+        {isFreetextMode ? "Exit Note Mode" : "Add Note"}
+      </button>
     </div>
   );
 };

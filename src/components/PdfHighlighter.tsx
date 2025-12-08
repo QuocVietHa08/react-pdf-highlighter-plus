@@ -24,6 +24,7 @@ import groupHighlightsByPage from "../lib/group-highlights-by-page";
 import {
   asElement,
   findOrCreateContainerLayer,
+  getPageFromElement,
   getPagesFromRange,
   getWindow,
   isHTMLElement,
@@ -35,6 +36,7 @@ import {
   HighlightBindings,
   PdfScaleValue,
   PdfSelection,
+  ScaledPosition,
   Tip,
   ViewportPosition,
 } from "../types";
@@ -166,6 +168,21 @@ export interface PdfHighlighterProps {
    * other style props like `textSelectionColor` or overwrite pdf_viewer.css
    */
   style?: CSSProperties;
+
+  /**
+   * Condition to check before freetext creation starts.
+   *
+   * @param event - mouse event associated with the click.
+   * @returns - `True` if freetext creation should occur.
+   */
+  enableFreetextCreation?(event: MouseEvent): boolean;
+
+  /**
+   * Callback triggered when user clicks to create a freetext annotation.
+   *
+   * @param position - Scaled position where the click occurred.
+   */
+  onFreetextClick?(position: ScaledPosition): void;
 }
 
 /**
@@ -193,6 +210,8 @@ export const PdfHighlighter = ({
   textSelectionColor = DEFAULT_TEXT_SELECTION_COLOR,
   utilsRef,
   style,
+  enableFreetextCreation,
+  onFreetextClick,
 }: PdfHighlighterProps) => {
   // State
   const [tip, setTip] = useState<Tip | null>(null);
@@ -341,6 +360,45 @@ export const PdfHighlighter = ({
       asElement(event.target).closest(".PdfHighlighter__tip-container") // Ignore selections on tip container
     ) {
       return;
+    }
+
+    // Check for freetext creation mode
+    if (
+      enableFreetextCreation?.(event.nativeEvent) &&
+      onFreetextClick &&
+      !isEditInProgressRef.current
+    ) {
+      const target = asElement(event.target);
+      const page = getPageFromElement(target);
+
+      if (page && viewerRef.current) {
+        const pageRect = page.node.getBoundingClientRect();
+        const clickX = event.clientX - pageRect.left;
+        const clickY = event.clientY - pageRect.top;
+
+        // Default size for new freetext note
+        const defaultWidth = 150;
+        const defaultHeight = 80;
+
+        const viewportPosition: ViewportPosition = {
+          boundingRect: {
+            left: clickX,
+            top: clickY,
+            width: defaultWidth,
+            height: defaultHeight,
+            pageNumber: page.number,
+          },
+          rects: [],
+        };
+
+        const scaledPosition = viewportPositionToScaled(
+          viewportPosition,
+          viewerRef.current,
+        );
+
+        onFreetextClick(scaledPosition);
+        return; // Don't proceed with normal mousedown handling
+      }
     }
 
     setTip(null);

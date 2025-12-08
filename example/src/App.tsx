@@ -11,6 +11,7 @@ import {
   PdfHighlighter,
   PdfHighlighterUtils,
   PdfLoader,
+  ScaledPosition,
   Tip,
   ViewportHighlight,
 } from "./react-pdf-highlighter-extended";
@@ -43,6 +44,7 @@ const App = () => {
     undefined,
   );
   const [highlightPen, setHighlightPen] = useState<boolean>(false);
+  const [freetextMode, setFreetextMode] = useState<boolean>(false);
 
   // Refs for PdfHighlighter utilities
   const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
@@ -103,6 +105,19 @@ const App = () => {
         highlight.id === idToUpdate ? { ...highlight, ...edit } : highlight,
       ),
     );
+  };
+
+  const handleFreetextClick = (position: ScaledPosition) => {
+    console.log("Creating freetext highlight", position);
+    const newHighlight: CommentedHighlight = {
+      id: getNextId(),
+      type: "freetext",
+      position,
+      content: { text: "New note" },
+      comment: "",
+    };
+    setHighlights([newHighlight, ...highlights]);
+    setFreetextMode(false); // Exit mode after creating
   };
 
   const resetHighlights = () => {
@@ -169,7 +184,12 @@ const App = () => {
           flexGrow: 1,
         }}
       >
-        <Toolbar setPdfScaleValue={(value) => setPdfScaleValue(value)} toggleHighlightPen={() => setHighlightPen(!highlightPen)} />
+        <Toolbar
+          setPdfScaleValue={(value) => setPdfScaleValue(value)}
+          toggleHighlightPen={() => setHighlightPen(!highlightPen)}
+          toggleFreetextMode={() => setFreetextMode(!freetextMode)}
+          isFreetextMode={freetextMode}
+        />
         <PdfLoader document={url}>
           {(pdfDocument) => (
             <PdfHighlighter
@@ -184,6 +204,8 @@ const App = () => {
               onSelection={highlightPen ? (selection) => addHighlight(selection.makeGhostHighlight(), "") : undefined}
               selectionTip={highlightPen ? undefined : <ExpandableTip addHighlight={addHighlight} />}
               highlights={highlights}
+              enableFreetextCreation={() => freetextMode}
+              onFreetextClick={handleFreetextClick}
               style={{
                 height: "calc(100% - 41px)",
               }}

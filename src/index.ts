@@ -8,6 +8,11 @@ import {
   MonitoredHighlightContainerProps,
 } from "./components/MonitoredHighlightContainer";
 import { AreaHighlight, AreaHighlightProps } from "./components/AreaHighlight";
+import {
+  FreetextHighlight,
+  FreetextHighlightProps,
+  FreetextStyle,
+} from "./components/FreetextHighlight";
 import { PdfLoader, PdfLoaderProps } from "./components/PdfLoader";
 import {
   HighlightContainerUtils,
@@ -29,6 +34,7 @@ export {
   TextHighlight,
   MonitoredHighlightContainer,
   AreaHighlight,
+  FreetextHighlight,
   useHighlightContainerContext,
   viewportPositionToScaled,
   scaledPositionToViewport,
@@ -42,6 +48,8 @@ export type {
   TextHighlightProps,
   MonitoredHighlightContainerProps,
   AreaHighlightProps,
+  FreetextHighlightProps,
+  FreetextStyle,
   PdfLoaderProps,
 };
 export * from "./types";

@@ -2,6 +2,7 @@ import React, { MouseEvent } from "react";
 import HighlightPopup from "./HighlightPopup";
 import {
   AreaHighlight,
+  FreetextHighlight,
   MonitoredHighlightContainer,
   TextHighlight,
   Tip,
@@ -36,39 +37,80 @@ const HighlightContainer = ({
 
   const { toggleEditInProgress } = usePdfHighlighterContext();
 
-  const component = highlight.type === "text" ? (
-    <TextHighlight
-      isScrolledTo={isScrolledTo}
-      highlight={highlight}
-      onContextMenu={(event) =>
-        onContextMenu && onContextMenu(event, highlight)
-      }
-    />
-  ) : (
-    <AreaHighlight
-      isScrolledTo={isScrolledTo}
-      highlight={highlight}
-      onChange={(boundingRect) => {
-        const edit = {
-          position: {
-            boundingRect: viewportToScaled(boundingRect),
-            rects: [],
-          },
-          content: {
-            image: screenshot(boundingRect),
-          },
-        };
+  let component;
 
-        editHighlight(highlight.id, edit);
-        toggleEditInProgress(false);
-      }}
-      bounds={highlightBindings.textLayer}
-      onContextMenu={(event) =>
-        onContextMenu && onContextMenu(event, highlight)
-      }
-      onEditStart={() => toggleEditInProgress(true)}
-    />
-  );
+  if (highlight.type === "text") {
+    component = (
+      <TextHighlight
+        isScrolledTo={isScrolledTo}
+        highlight={highlight}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+      />
+    );
+  } else if (highlight.type === "freetext") {
+    component = (
+      <FreetextHighlight
+        highlight={highlight}
+        isScrolledTo={isScrolledTo}
+        bounds={highlightBindings.textLayer}
+        color={highlight.color}
+        backgroundColor={highlight.backgroundColor}
+        fontSize={highlight.fontSize}
+        fontFamily={highlight.fontFamily}
+        onChange={(boundingRect) => {
+          editHighlight(highlight.id, {
+            position: {
+              boundingRect: viewportToScaled(boundingRect),
+              rects: [],
+            },
+          });
+          toggleEditInProgress(false);
+        }}
+        onTextChange={(newText) => {
+          editHighlight(highlight.id, {
+            content: { text: newText },
+          });
+        }}
+        onStyleChange={(style) => {
+          editHighlight(highlight.id, style);
+        }}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+        onEditStart={() => toggleEditInProgress(true)}
+        onEditEnd={() => toggleEditInProgress(false)}
+      />
+    );
+  } else {
+    // Area highlight (default)
+    component = (
+      <AreaHighlight
+        isScrolledTo={isScrolledTo}
+        highlight={highlight}
+        onChange={(boundingRect) => {
+          const edit = {
+            position: {
+              boundingRect: viewportToScaled(boundingRect),
+              rects: [],
+            },
+            content: {
+              image: screenshot(boundingRect),
+            },
+          };
+
+          editHighlight(highlight.id, edit);
+          toggleEditInProgress(false);
+        }}
+        bounds={highlightBindings.textLayer}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+        onEditStart={() => toggleEditInProgress(true)}
+      />
+    );
+  }
 
   const highlightTip: Tip = {
     position: highlight.position,
@@ -77,7 +119,7 @@ const HighlightContainer = ({
 
   return (
     <MonitoredHighlightContainer
-      highlightTip={highlightTip}
+      highlightTip={highlight.type !== "freetext" ? highlightTip : undefined}
       key={highlight.id}
       children={component}
     />

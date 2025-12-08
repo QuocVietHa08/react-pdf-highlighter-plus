@@ -117,6 +117,18 @@ export interface FreetextHighlightProps {
    * Custom style/settings icon. Receives default icon as child if not provided.
    */
   styleIcon?: ReactNode;
+
+  /**
+   * Custom background color presets for the style panel.
+   * Default: ["#ffffc8", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"]
+   */
+  backgroundColorPresets?: string[];
+
+  /**
+   * Custom text color presets for the style panel.
+   * Default: ["#333333", "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2"]
+   */
+  textColorPresets?: string[];
 }
 
 /**
@@ -148,6 +160,10 @@ const DefaultStyleIcon = () => (
   </svg>
 );
 
+// Default color presets
+const DEFAULT_BACKGROUND_PRESETS = ["#ffffc8", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"];
+const DEFAULT_TEXT_PRESETS = ["#333333", "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2"];
+
 export const FreetextHighlight = ({
   highlight,
   onChange,
@@ -166,6 +182,8 @@ export const FreetextHighlight = ({
   dragIcon,
   editIcon,
   styleIcon,
+  backgroundColorPresets = DEFAULT_BACKGROUND_PRESETS,
+  textColorPresets = DEFAULT_TEXT_PRESETS,
 }: FreetextHighlightProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
@@ -322,23 +340,51 @@ export const FreetextHighlight = ({
             >
               <div className="FreetextHighlight__style-row">
                 <label>Background</label>
-                <input
-                  type="color"
-                  value={backgroundColor}
-                  onChange={(e) => {
-                    onStyleChange?.({ backgroundColor: e.target.value });
-                  }}
-                />
+                <div className="FreetextHighlight__color-options">
+                  <div className="FreetextHighlight__color-presets">
+                    {backgroundColorPresets.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`FreetextHighlight__color-preset ${backgroundColor === c ? "active" : ""}`}
+                        style={{ backgroundColor: c }}
+                        onClick={() => onStyleChange?.({ backgroundColor: c })}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    type="color"
+                    value={backgroundColor}
+                    onChange={(e) => {
+                      onStyleChange?.({ backgroundColor: e.target.value });
+                    }}
+                  />
+                </div>
               </div>
               <div className="FreetextHighlight__style-row">
                 <label>Text Color</label>
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => {
-                    onStyleChange?.({ color: e.target.value });
-                  }}
-                />
+                <div className="FreetextHighlight__color-options">
+                  <div className="FreetextHighlight__color-presets">
+                    {textColorPresets.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`FreetextHighlight__color-preset ${color === c ? "active" : ""}`}
+                        style={{ backgroundColor: c }}
+                        onClick={() => onStyleChange?.({ color: c })}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    type="color"
+                    value={color}
+                    onChange={(e) => {
+                      onStyleChange?.({ color: e.target.value });
+                    }}
+                  />
+                </div>
               </div>
               <div className="FreetextHighlight__style-row">
                 <label>Font Size</label>

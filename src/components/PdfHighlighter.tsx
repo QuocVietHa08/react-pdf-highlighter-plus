@@ -576,11 +576,14 @@ export const PdfHighlighter = ({
 
   utilsRef(pdfHighlighterUtils);
 
+  // Check if freetext mode is active for cursor styling
+  const isFreetextMode = enableFreetextCreation?.({} as MouseEvent) ?? false;
+
   return (
     <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
       <div
         ref={containerNodeRef}
-        className="PdfHighlighter"
+        className={`PdfHighlighter${isFreetextMode ? ' PdfHighlighter--freetext-mode' : ''}`}
         onPointerDown={handleMouseDown}
         onPointerUp={handleMouseUp}
         style={style}

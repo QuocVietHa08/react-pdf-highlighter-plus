@@ -9,7 +9,7 @@
   height: 100%;
   border-radius: 4px;
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
+  overflow: visible;
   transition: box-shadow 0.2s ease;
 }
 
@@ -24,6 +24,8 @@
   padding: 4px 6px;
   background: rgba(0, 0, 0, 0.08);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 10;
 }
 
 .FreetextHighlight__drag-handle {
@@ -72,6 +74,8 @@
   flex: 1;
   padding: 8px;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .FreetextHighlight__text {
@@ -132,18 +136,18 @@
   background: white;
   border: 1px solid rgba(0, 0, 0, 0.15);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   padding: 8px;
-  z-index: 1000;
+  z-index: 9999;
   margin-top: 2px;
 }
 
 .FreetextHighlight__style-row {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 6px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .FreetextHighlight__style-row:last-child {
@@ -173,4 +177,38 @@
   background: white;
   cursor: pointer;
   min-width: 80px;
+}
+
+.FreetextHighlight__color-options {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.FreetextHighlight__color-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.FreetextHighlight__color-preset {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.FreetextHighlight__color-preset:hover {
+  transform: scale(1.15);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.FreetextHighlight__color-preset.active {
+  border-color: #333;
+  box-shadow: 0 0 0 1px white, 0 0 0 2px #333;
 }

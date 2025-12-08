@@ -39,3 +39,12 @@
   user-select: none;
   pointer-events: none;
 }
+
+.PdfHighlighter--freetext-mode {
+  cursor: crosshair;
+}
+
+.PdfHighlighter--freetext-mode .pdfViewer,
+.PdfHighlighter--freetext-mode .textLayer {
+  cursor: crosshair;
+}

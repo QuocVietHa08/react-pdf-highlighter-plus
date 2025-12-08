@@ -31,6 +31,7 @@ import {
 } from "../lib/pdfjs-dom";
 import {
   Content,
+  DrawingStroke,
   GhostHighlight,
   Highlight,
   HighlightBindings,
@@ -40,6 +41,7 @@ import {
   Tip,
   ViewportPosition,
 } from "../types";
+import { DrawingCanvas } from "./DrawingCanvas";
 import { HighlightLayer } from "./HighlightLayer";
 import { MouseSelection } from "./MouseSelection";
 import { TipContainer } from "./TipContainer";
@@ -198,6 +200,37 @@ export interface PdfHighlighterProps {
    * @param position - Scaled position where the click occurred.
    */
   onImageClick?(position: ScaledPosition): void;
+
+  /**
+   * Whether drawing mode is enabled.
+   */
+  enableDrawingMode?: boolean;
+
+  /**
+   * Callback triggered when a drawing is completed.
+   *
+   * @param dataUrl - The drawing as a PNG data URL.
+   * @param position - Scaled position of the drawing on the page.
+   * @param strokes - The stroke data for later editing.
+   */
+  onDrawingComplete?(dataUrl: string, position: ScaledPosition, strokes: DrawingStroke[]): void;
+
+  /**
+   * Callback triggered when drawing is cancelled.
+   */
+  onDrawingCancel?(): void;
+
+  /**
+   * Stroke color for drawing mode.
+   * @default "#000000"
+   */
+  drawingStrokeColor?: string;
+
+  /**
+   * Stroke width for drawing mode.
+   * @default 3
+   */
+  drawingStrokeWidth?: number;
 }
 
 /**
@@ -229,6 +262,11 @@ export const PdfHighlighter = ({
   onFreetextClick,
   enableImageCreation,
   onImageClick,
+  enableDrawingMode,
+  onDrawingComplete,
+  onDrawingCancel,
+  drawingStrokeColor = "#000000",
+  drawingStrokeWidth = 3,
 }: PdfHighlighterProps) => {
   // State
   const [tip, setTip] = useState<Tip | null>(null);
@@ -640,6 +678,7 @@ export const PdfHighlighter = ({
   let containerClassName = 'PdfHighlighter';
   if (isFreetextMode) containerClassName += ' PdfHighlighter--freetext-mode';
   if (isImageMode) containerClassName += ' PdfHighlighter--image-mode';
+  if (enableDrawingMode) containerClassName += ' PdfHighlighter--drawing-mode';
 
   return (
     <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
@@ -704,6 +743,22 @@ export const PdfHighlighter = ({
               onSelectionFinished && onSelectionFinished(selectionRef.current);
               selectionTip &&
                 setTip({ position: viewportPosition, content: selectionTip });
+            }}
+          />
+        )}
+        {isViewerReady && enableDrawingMode && (
+          <DrawingCanvas
+            isActive={enableDrawingMode}
+            strokeColor={drawingStrokeColor}
+            strokeWidth={drawingStrokeWidth}
+            viewer={viewerRef.current!}
+            onComplete={(dataUrl, position, strokes) => {
+              console.log("PdfHighlighter: Drawing complete");
+              onDrawingComplete?.(dataUrl, position, strokes);
+            }}
+            onCancel={() => {
+              console.log("PdfHighlighter: Drawing cancelled");
+              onDrawingCancel?.();
             }}
           />
         )}

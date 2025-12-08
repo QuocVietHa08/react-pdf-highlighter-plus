@@ -72,6 +72,27 @@ export type ScaledPosition = {
 };
 
 /**
+ * A point in a drawing stroke.
+ *
+ * @category Type
+ */
+export type DrawingPoint = {
+  x: number;
+  y: number;
+};
+
+/**
+ * A stroke in a drawing, with its own color and width.
+ *
+ * @category Type
+ */
+export type DrawingStroke = {
+  points: DrawingPoint[];
+  color: string;
+  width: number;
+};
+
+/**
  * The content of a highlight
  *
  * @category Type
@@ -79,6 +100,8 @@ export type ScaledPosition = {
 export type Content = {
   text?: string;
   image?: string;
+  /** For drawing highlights, store the stroke data for later editing */
+  strokes?: DrawingStroke[];
 };
 
 /**
@@ -87,7 +110,7 @@ export type Content = {
  *
  * @category Type
  */
-export type HighlightType = "text" | "area" | "freetext" | "image";
+export type HighlightType = "text" | "area" | "freetext" | "image" | "drawing";
 
 /**
  * This represents a selected (text/mouse) area that has been turned into a

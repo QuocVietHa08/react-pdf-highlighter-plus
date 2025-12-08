@@ -204,6 +204,27 @@ export const FreetextHighlight = ({
     }
   }, [isEditing]);
 
+  // Close style panel when clicking outside
+  useEffect(() => {
+    if (!isStylePanelOpen) return;
+
+    const handleClickOutside = (e: globalThis.MouseEvent) => {
+      if (stylePanelRef.current && !stylePanelRef.current.contains(e.target as Node)) {
+        setIsStylePanelOpen(false);
+      }
+    };
+
+    // Delay adding listener to avoid immediate close
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isStylePanelOpen]);
+
   const highlightClass = isScrolledTo ? "FreetextHighlight--scrolledTo" : "";
   const editingClass = isEditing ? "FreetextHighlight--editing" : "";
 

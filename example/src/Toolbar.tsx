@@ -2,6 +2,14 @@ import React, { useState } from "react";
 
 import "./style/Toolbar.css";
 
+// Drawing style presets
+const DRAWING_COLORS = ["#000000", "#FF0000", "#0000FF", "#00FF00", "#FFFF00"];
+const STROKE_WIDTHS = [
+  { label: "Thin", value: 1 },
+  { label: "Medium", value: 3 },
+  { label: "Thick", value: 5 },
+];
+
 interface ToolbarProps {
   setPdfScaleValue: (value: number) => void;
   toggleHighlightPen: () => void;
@@ -10,9 +18,30 @@ interface ToolbarProps {
   onAddImage: () => void;
   onAddSignature: () => void;
   onExportPdf: () => void;
+  // Drawing mode props
+  isDrawingMode?: boolean;
+  onToggleDrawingMode?: () => void;
+  drawingStrokeColor?: string;
+  onDrawingColorChange?: (color: string) => void;
+  drawingStrokeWidth?: number;
+  onDrawingWidthChange?: (width: number) => void;
 }
 
-const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isFreetextMode, onAddImage, onAddSignature, onExportPdf }: ToolbarProps) => {
+const Toolbar = ({
+  setPdfScaleValue,
+  toggleHighlightPen,
+  toggleFreetextMode,
+  isFreetextMode,
+  onAddImage,
+  onAddSignature,
+  onExportPdf,
+  isDrawingMode = false,
+  onToggleDrawingMode,
+  drawingStrokeColor = "#000000",
+  onDrawingColorChange,
+  drawingStrokeWidth = 3,
+  onDrawingWidthChange,
+}: ToolbarProps) => {
   const [zoom, setZoom] = useState<number | null>(null);
   const [isHighlightPen, setIsHighlightPen] = useState<boolean>(false);
 
@@ -72,6 +101,15 @@ const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isF
       >
         Add Signature
       </button>
+      <div className="DrawingControls">
+        <button
+          title="Draw on PDF"
+          className={`DrawButton ${isDrawingMode ? 'active' : ''}`}
+          onClick={onToggleDrawingMode}
+        >
+          {isDrawingMode ? "Exit Draw" : "Draw"}
+        </button>
+      </div>
       <button
         title="Export PDF with annotations"
         className="ExportButton"

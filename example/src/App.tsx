@@ -6,6 +6,7 @@ import HighlightContainer from "./HighlightContainer";
 import Sidebar from "./Sidebar";
 import Toolbar from "./Toolbar";
 import {
+  DrawingStroke,
   GhostHighlight,
   Highlight,
   PdfHighlighter,
@@ -50,6 +51,10 @@ const App = () => {
   const [imageMode, setImageMode] = useState<boolean>(false);
   const [isSignaturePadOpen, setIsSignaturePadOpen] = useState<boolean>(false);
   const [pendingImageData, setPendingImageData] = useState<string | null>(null);
+  // Drawing mode state
+  const [drawingMode, setDrawingMode] = useState<boolean>(false);
+  const [drawingStrokeColor, setDrawingStrokeColor] = useState<string>("#000000");
+  const [drawingStrokeWidth, setDrawingStrokeWidth] = useState<number>(3);
 
   // Refs for PdfHighlighter utilities
   const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
@@ -174,6 +179,24 @@ const App = () => {
     setImageMode(true);
   };
 
+  const handleDrawingComplete = (dataUrl: string, position: ScaledPosition, strokes: DrawingStroke[]) => {
+    console.log("Drawing complete", position, "with", strokes.length, "strokes");
+    const newHighlight: CommentedHighlight = {
+      id: getNextId(),
+      type: "drawing",
+      position,
+      content: { image: dataUrl, strokes },
+      comment: "",
+    };
+    setHighlights([newHighlight, ...highlights]);
+    setDrawingMode(false);
+  };
+
+  const handleDrawingCancel = () => {
+    console.log("Drawing cancelled");
+    setDrawingMode(false);
+  };
+
   const handleExportPdf = async () => {
     console.log("Exporting PDF with annotations...");
     try {
@@ -273,6 +296,12 @@ const App = () => {
           onAddImage={handleAddImage}
           onAddSignature={handleAddSignature}
           onExportPdf={handleExportPdf}
+          isDrawingMode={drawingMode}
+          onToggleDrawingMode={() => setDrawingMode(!drawingMode)}
+          drawingStrokeColor={drawingStrokeColor}
+          onDrawingColorChange={setDrawingStrokeColor}
+          drawingStrokeWidth={drawingStrokeWidth}
+          onDrawingWidthChange={setDrawingStrokeWidth}
         />
         <PdfLoader document={url}>
           {(pdfDocument) => (
@@ -292,6 +321,11 @@ const App = () => {
               onFreetextClick={handleFreetextClick}
               enableImageCreation={() => imageMode}
               onImageClick={handleImageClick}
+              enableDrawingMode={drawingMode}
+              onDrawingComplete={handleDrawingComplete}
+              onDrawingCancel={handleDrawingCancel}
+              drawingStrokeColor={drawingStrokeColor}
+              drawingStrokeWidth={drawingStrokeWidth}
               style={{
                 height: "calc(100% - 41px)",
               }}

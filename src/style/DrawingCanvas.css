@@ -1,0 +1,62 @@
+.DrawingCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.DrawingCanvas__controls {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  padding: 10px 20px;
+  background-color: rgba(43, 46, 51, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.DrawingCanvas__controls button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.DrawingCanvas__controls button:hover {
+  transform: scale(1.02);
+}
+
+.DrawingCanvas__doneButton {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.DrawingCanvas__doneButton:hover {
+  background-color: #45a049;
+}
+
+.DrawingCanvas__cancelButton {
+  background-color: #f44336;
+  color: white;
+}
+
+.DrawingCanvas__cancelButton:hover {
+  background-color: #da190b;
+}
+
+.DrawingCanvas__clearButton {
+  background-color: #ff9800;
+  color: white;
+}
+
+.DrawingCanvas__clearButton:hover {
+  background-color: #e68a00;
+}

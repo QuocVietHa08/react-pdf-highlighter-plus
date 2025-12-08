@@ -1,0 +1,165 @@
+.DrawingHighlight {
+  position: absolute;
+}
+
+.DrawingHighlight__container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: visible;
+  transition: box-shadow 0.2s ease;
+}
+
+.DrawingHighlight__container:hover {
+  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.3);
+}
+
+.DrawingHighlight__toolbar {
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.DrawingHighlight__container:hover .DrawingHighlight__toolbar {
+  opacity: 1;
+}
+
+.DrawingHighlight__drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: grab;
+  color: white;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.DrawingHighlight__drag-handle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.DrawingHighlight__drag-handle:active {
+  cursor: grabbing;
+}
+
+.DrawingHighlight__content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  /* Transparent background for drawings */
+  background: transparent;
+}
+
+.DrawingHighlight__image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.DrawingHighlight--scrolledTo .DrawingHighlight__container {
+  box-shadow: 0 0 0 3px #ff4141, 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Style edit button */
+.DrawingHighlight__style-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: white;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.DrawingHighlight__style-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Style controls dropdown */
+.DrawingHighlight__style-controls {
+  position: absolute;
+  top: 28px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 6px;
+  padding: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.DrawingHighlight__color-picker {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.DrawingHighlight__color-button {
+  width: 20px;
+  height: 20px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+  padding: 0;
+}
+
+.DrawingHighlight__color-button:hover {
+  transform: scale(1.15);
+}
+
+.DrawingHighlight__color-button.active {
+  border-color: #b958ff;
+}
+
+.DrawingHighlight__width-picker {
+  display: flex;
+  gap: 4px;
+}
+
+.DrawingHighlight__width-button {
+  background: transparent;
+  color: #f5f5f5;
+  border: 1px solid #666;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 6px;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.DrawingHighlight__width-button:hover {
+  border-color: #b958ff;
+}
+
+.DrawingHighlight__width-button.active {
+  color: #b958ff;
+  border-color: #b958ff;
+  background-color: rgba(185, 88, 255, 0.2);
+}

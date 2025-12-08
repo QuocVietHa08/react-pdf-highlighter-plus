@@ -2,6 +2,7 @@ import React, { MouseEvent } from "react";
 import HighlightPopup from "./HighlightPopup";
 import {
   AreaHighlight,
+  DrawingHighlight,
   FreetextHighlight,
   ImageHighlight,
   MonitoredHighlightContainer,
@@ -105,6 +106,36 @@ const HighlightContainer = ({
         onEditEnd={() => toggleEditInProgress(false)}
       />
     );
+  } else if (highlight.type === "drawing") {
+    component = (
+      <DrawingHighlight
+        highlight={highlight}
+        isScrolledTo={isScrolledTo}
+        bounds={highlightBindings.textLayer}
+        onChange={(boundingRect) => {
+          editHighlight(highlight.id, {
+            position: {
+              boundingRect: viewportToScaled(boundingRect),
+              rects: [],
+            },
+          });
+        }}
+        onStyleChange={(newImage, newStrokes) => {
+          console.log("Drawing style changed, updating highlight");
+          editHighlight(highlight.id, {
+            content: {
+              image: newImage,
+              strokes: newStrokes,
+            },
+          });
+        }}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+        onEditStart={() => toggleEditInProgress(true)}
+        onEditEnd={() => toggleEditInProgress(false)}
+      />
+    );
   } else {
     // Area highlight (default)
     component = (
@@ -139,8 +170,8 @@ const HighlightContainer = ({
     content: <HighlightPopup highlight={highlight} />,
   };
 
-  // Don't show popup tip for freetext and image highlights
-  const showTip = highlight.type !== "freetext" && highlight.type !== "image";
+  // Don't show popup tip for freetext, image, and drawing highlights
+  const showTip = highlight.type !== "freetext" && highlight.type !== "image" && highlight.type !== "drawing";
 
   return (
     <MonitoredHighlightContainer

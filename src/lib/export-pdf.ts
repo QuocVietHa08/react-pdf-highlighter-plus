@@ -28,7 +28,7 @@ export interface ExportPdfOptions {
  */
 export interface ExportableHighlight {
   id: string;
-  type?: "text" | "area" | "freetext" | "image";
+  type?: "text" | "area" | "freetext" | "image" | "drawing";
   content?: {
     text?: string;
     image?: string; // Base64 data URL
@@ -363,6 +363,10 @@ export async function exportPdf(
           await renderFreetextHighlight(page, highlight, options, font);
           break;
         case "image":
+          await renderImageHighlight(pdfDoc, page, highlight);
+          break;
+        case "drawing":
+          // Drawings are stored as PNG images, reuse image highlight rendering
           await renderImageHighlight(pdfDoc, page, highlight);
           break;
         default:

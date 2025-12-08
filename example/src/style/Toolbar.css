@@ -78,3 +78,80 @@
 .FreetextButton.active {
     color: #b958ff;
 }
+
+/* Drawing Controls */
+.DrawingControls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.DrawButton {
+    background: none;
+    color: #f5f5f5;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px;
+    transition: color 0.3s, transform 0.2s;
+}
+
+.DrawButton:hover {
+    color: #b958ff;
+    transform: scale(1.05);
+}
+
+.DrawButton.active {
+    color: #b958ff;
+}
+
+.ColorPicker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ColorButton {
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+    padding: 0;
+}
+
+.ColorButton:hover {
+    transform: scale(1.15);
+}
+
+.ColorButton.active {
+    border-color: #b958ff;
+}
+
+.ThicknessPicker {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ThicknessButton {
+    background: none;
+    color: #f5f5f5;
+    border: 1px solid #666;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.ThicknessButton:hover {
+    border-color: #b958ff;
+}
+
+.ThicknessButton.active {
+    color: #b958ff;
+    border-color: #b958ff;
+    background-color: rgba(185, 88, 255, 0.1);
+}

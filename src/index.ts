@@ -21,6 +21,14 @@ import {
   SignaturePad,
   SignaturePadProps,
 } from "./components/SignaturePad";
+import {
+  DrawingCanvas,
+  DrawingCanvasProps,
+} from "./components/DrawingCanvas";
+import {
+  DrawingHighlight,
+  DrawingHighlightProps,
+} from "./components/DrawingHighlight";
 import { PdfLoader, PdfLoaderProps } from "./components/PdfLoader";
 import {
   HighlightContainerUtils,
@@ -50,6 +58,8 @@ export {
   FreetextHighlight,
   ImageHighlight,
   SignaturePad,
+  DrawingCanvas,
+  DrawingHighlight,
   useHighlightContainerContext,
   viewportPositionToScaled,
   scaledPositionToViewport,
@@ -68,6 +78,8 @@ export type {
   FreetextStyle,
   ImageHighlightProps,
   SignaturePadProps,
+  DrawingCanvasProps,
+  DrawingHighlightProps,
   PdfLoaderProps,
   ExportPdfOptions,
   ExportableHighlight,

@@ -183,6 +183,21 @@ export interface PdfHighlighterProps {
    * @param position - Scaled position where the click occurred.
    */
   onFreetextClick?(position: ScaledPosition): void;
+
+  /**
+   * Condition to check before image creation starts.
+   *
+   * @param event - mouse event associated with the click.
+   * @returns - `True` if image creation should occur.
+   */
+  enableImageCreation?(event: MouseEvent): boolean;
+
+  /**
+   * Callback triggered when user clicks to create an image annotation.
+   *
+   * @param position - Scaled position where the click occurred.
+   */
+  onImageClick?(position: ScaledPosition): void;
 }
 
 /**
@@ -212,6 +227,8 @@ export const PdfHighlighter = ({
   style,
   enableFreetextCreation,
   onFreetextClick,
+  enableImageCreation,
+  onImageClick,
 }: PdfHighlighterProps) => {
   // State
   const [tip, setTip] = useState<Tip | null>(null);
@@ -401,6 +418,45 @@ export const PdfHighlighter = ({
       }
     }
 
+    // Check for image creation mode
+    if (
+      enableImageCreation?.(event.nativeEvent) &&
+      onImageClick &&
+      !isEditInProgressRef.current
+    ) {
+      const target = asElement(event.target);
+      const page = getPageFromElement(target);
+
+      if (page && viewerRef.current) {
+        const pageRect = page.node.getBoundingClientRect();
+        const clickX = event.clientX - pageRect.left;
+        const clickY = event.clientY - pageRect.top;
+
+        // Default size for new image
+        const defaultWidth = 150;
+        const defaultHeight = 100;
+
+        const viewportPosition: ViewportPosition = {
+          boundingRect: {
+            left: clickX,
+            top: clickY,
+            width: defaultWidth,
+            height: defaultHeight,
+            pageNumber: page.number,
+          },
+          rects: [],
+        };
+
+        const scaledPosition = viewportPositionToScaled(
+          viewportPosition,
+          viewerRef.current,
+        );
+
+        onImageClick(scaledPosition);
+        return; // Don't proceed with normal mousedown handling
+      }
+    }
+
     setTip(null);
     clearTextSelection(); // TODO: Check if clearing text selection only if not clicking on tip breaks anything.
     removeGhostHighlight();
@@ -576,14 +632,20 @@ export const PdfHighlighter = ({
 
   utilsRef(pdfHighlighterUtils);
 
-  // Check if freetext mode is active for cursor styling
+  // Check if freetext or image mode is active for cursor styling
   const isFreetextMode = enableFreetextCreation?.({} as MouseEvent) ?? false;
+  const isImageMode = enableImageCreation?.({} as MouseEvent) ?? false;
+
+  // Build class name based on active modes
+  let containerClassName = 'PdfHighlighter';
+  if (isFreetextMode) containerClassName += ' PdfHighlighter--freetext-mode';
+  if (isImageMode) containerClassName += ' PdfHighlighter--image-mode';
 
   return (
     <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
       <div
         ref={containerNodeRef}
-        className={`PdfHighlighter${isFreetextMode ? ' PdfHighlighter--freetext-mode' : ''}`}
+        className={containerClassName}
         onPointerDown={handleMouseDown}
         onPointerUp={handleMouseUp}
         style={style}

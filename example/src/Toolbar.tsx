@@ -7,9 +7,11 @@ interface ToolbarProps {
   toggleHighlightPen: () => void;
   toggleFreetextMode: () => void;
   isFreetextMode: boolean;
+  onAddImage: () => void;
+  onAddSignature: () => void;
 }
 
-const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isFreetextMode }: ToolbarProps) => {
+const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isFreetextMode, onAddImage, onAddSignature }: ToolbarProps) => {
   const [zoom, setZoom] = useState<number | null>(null);
   const [isHighlightPen, setIsHighlightPen] = useState<boolean>(false);
 
@@ -54,6 +56,20 @@ const Toolbar = ({ setPdfScaleValue, toggleHighlightPen, toggleFreetextMode, isF
         onClick={toggleFreetextMode}
       >
         {isFreetextMode ? "Exit Note Mode" : "Add Note"}
+      </button>
+      <button
+        title="Add Image"
+        className="ImageButton"
+        onClick={onAddImage}
+      >
+        Add Image
+      </button>
+      <button
+        title="Add Signature"
+        className="SignatureButton"
+        onClick={onAddSignature}
+      >
+        Add Signature
       </button>
     </div>
   );

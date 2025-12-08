@@ -1,11 +1,20 @@
 # react-pdf-highlighter-extended
 
-[![Node.js CI](https://github.com/DanielArnould/react-pdf-highlighter-extended/actions/workflows/node.js.yml/badge.svg)](https://github.com/DanielArnould/react-pdf-highlighter-extended/actions/workflows/node.js.yml)
+[![Node.js CI](https://github.com/QuocVietHa08/react-pdf-highlighter-plus/actions/workflows/node.js.yml/badge.svg)](https://github.com/QuocVietHa08/react-pdf-highlighter-plus/actions/workflows/node.js.yml)
 [![npm version](https://badge.fury.io/js/react-pdf-highlighter-extended.svg)](https://badge.fury.io/js/react-pdf-highlighter-extended)
 
-`react-pdf-highlighter-extended` is a [React](https://reactjs.org/) library that provides a highly customisable annotation experience for PDF documents on the web, with text and rectangular highlights both supported. It leverages [PDF.js](https://github.com/mozilla/pdf.js) as its viewer. The highlight data format is also independent of the viewport, making it suitable for saving on a server.
+`react-pdf-highlighter-extended` is a [React](https://reactjs.org/) library that provides a highly customisable annotation experience for PDF documents on the web. It supports multiple highlight types including text highlights, area highlights, freetext notes, and image/signature annotations. It leverages [PDF.js](https://github.com/mozilla/pdf.js) as its viewer. The highlight data format is also independent of the viewport, making it suitable for saving on a server.
 
-This originally started as a fork of [`react-pdf-highlighter`](https://github.com/agentcooper/react-pdf-highlighter) but so much has been refactored and redesigned that it would be a burden to pull it to the original repo. Some of these changes include: addition of `HighlightContext`, `PdfHighlighterContext`, and `MonitoredHighlightContainer`; zoom support; exposed styling on all components; and numerous bugfixes. Efforts will be made to try to ensure feature parity with the original repo, but there are no guarantees that syntax and usage will be the same.
+## Features
+
+- **Text Highlights**: Select and highlight text in PDFs
+- **Area Highlights**: Draw rectangular regions on PDFs
+- **Freetext Notes**: Add draggable, editable text annotations with customizable styling
+- **Image & Signature Highlights**: Upload images or draw signatures and place them on PDFs
+- **Zoom Support**: Full zoom functionality with position-independent highlight data
+- **Customizable**: Exposed styling on all components
+
+This originally started as a fork of [`react-pdf-highlighter`](https://github.com/agentcooper/react-pdf-highlighter) but so much has been refactored and redesigned that it would be a burden to pull it to the original repo. Some of these changes include: addition of `HighlightContext`, `PdfHighlighterContext`, and `MonitoredHighlightContainer`; zoom support; exposed styling on all components; freetext and image highlight support; and numerous bugfixes.
 
 ## Table of Contents
 

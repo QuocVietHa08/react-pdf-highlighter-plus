@@ -48,3 +48,12 @@
 .PdfHighlighter--freetext-mode .textLayer {
   cursor: crosshair;
 }
+
+.PdfHighlighter--image-mode {
+  cursor: crosshair;
+}
+
+.PdfHighlighter--image-mode .pdfViewer,
+.PdfHighlighter--image-mode .textLayer {
+  cursor: crosshair;
+}

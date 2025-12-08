@@ -240,18 +240,224 @@ const handleFreetextClick = (position: ScaledPosition) => {
 
 ---
 
+## ImageHighlight Component
+
+A draggable, resizable image annotation component for PDF documents.
+
+### Import
+
+```tsx
+import { ImageHighlight } from "react-pdf-highlighter-extended";
+```
+
+### Props
+
+```typescript
+interface ImageHighlightProps {
+  /**
+   * The highlight to be rendered.
+   * The highlight.content.image should contain the image data URL.
+   */
+  highlight: ViewportHighlight;
+
+  /**
+   * Callback triggered when the highlight position or size changes.
+   * @param rect - The updated highlight area with page number.
+   */
+  onChange?(rect: LTWHP): void;
+
+  /**
+   * Whether the highlight has been auto-scrolled into view.
+   */
+  isScrolledTo?: boolean;
+
+  /**
+   * Bounds for the draggable area.
+   */
+  bounds?: string | Element;
+
+  /**
+   * Callback triggered on right-click.
+   */
+  onContextMenu?(event: MouseEvent<HTMLDivElement>): void;
+
+  /**
+   * Called when the user starts editing (drag or resize).
+   */
+  onEditStart?(): void;
+
+  /**
+   * Called when the user finishes editing.
+   */
+  onEditEnd?(): void;
+
+  /**
+   * Custom CSS styles for the container.
+   */
+  style?: CSSProperties;
+
+  /**
+   * Custom drag handle icon. Replaces the default 6-dot grid icon.
+   */
+  dragIcon?: ReactNode;
+}
+```
+
+### Usage Example
+
+```tsx
+<ImageHighlight
+  highlight={highlight}
+  isScrolledTo={isScrolledTo}
+  bounds={highlightBindings.textLayer}
+  onChange={(boundingRect) => {
+    editHighlight(highlight.id, {
+      position: {
+        boundingRect: viewportToScaled(boundingRect),
+        rects: [],
+      },
+    });
+  }}
+  onEditStart={() => toggleEditInProgress(true)}
+  onEditEnd={() => toggleEditInProgress(false)}
+/>
+```
+
+---
+
+## SignaturePad Component
+
+A modal component with a canvas for drawing signatures. Supports both mouse and touch input.
+
+### Import
+
+```tsx
+import { SignaturePad } from "react-pdf-highlighter-extended";
+```
+
+### Props
+
+```typescript
+interface SignaturePadProps {
+  /**
+   * Whether the signature pad modal is open.
+   */
+  isOpen: boolean;
+
+  /**
+   * Callback when signature is completed.
+   * @param dataUrl - The signature as a PNG data URL.
+   */
+  onComplete: (dataUrl: string) => void;
+
+  /**
+   * Callback when the modal is closed/cancelled.
+   */
+  onClose: () => void;
+
+  /**
+   * Canvas width in pixels.
+   * @default 400
+   */
+  width?: number;
+
+  /**
+   * Canvas height in pixels.
+   * @default 200
+   */
+  height?: number;
+}
+```
+
+### Usage Example
+
+```tsx
+const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
+const [pendingImageData, setPendingImageData] = useState<string | null>(null);
+
+const handleSignatureComplete = (dataUrl: string) => {
+  setPendingImageData(dataUrl);
+  setIsSignaturePadOpen(false);
+  // Enter image placement mode
+  setImageMode(true);
+};
+
+<SignaturePad
+  isOpen={isSignaturePadOpen}
+  onComplete={handleSignatureComplete}
+  onClose={() => setIsSignaturePadOpen(false)}
+  width={400}
+  height={200}
+/>
+```
+
+---
+
+## PdfHighlighter Props (Image-related)
+
+### enableImageCreation
+
+```typescript
+enableImageCreation?(event: MouseEvent): boolean;
+```
+
+Condition to check before an image placement click is registered.
+When this returns `true`, clicking on the PDF will place the pending image.
+
+**Example:**
+```tsx
+<PdfHighlighter
+  enableImageCreation={() => imageMode}
+  // ...
+/>
+```
+
+### onImageClick
+
+```typescript
+onImageClick?(position: ScaledPosition): void;
+```
+
+Callback triggered when user clicks to place an image annotation.
+Provides the scaled position where the click occurred.
+
+**Example:**
+```tsx
+const handleImageClick = (position: ScaledPosition) => {
+  if (pendingImageData) {
+    const newHighlight = {
+      id: generateId(),
+      type: "image",
+      position,
+      content: { image: pendingImageData },
+    };
+    setHighlights([newHighlight, ...highlights]);
+    setPendingImageData(null);
+    setImageMode(false);
+  }
+};
+
+<PdfHighlighter
+  onImageClick={handleImageClick}
+  // ...
+/>
+```
+
+---
+
 ## Types
 
 ### HighlightType
 
 ```typescript
-type HighlightType = "text" | "area" | "freetext";
+type HighlightType = "text" | "area" | "freetext" | "image";
 ```
 
 The type of highlight. Use this to determine which component to render:
 - `"text"` - TextHighlight for selected text
 - `"area"` - AreaHighlight for rectangular regions
 - `"freetext"` - FreetextHighlight for text annotations
+- `"image"` - ImageHighlight for images and signatures
 
 ### LTWHP
 

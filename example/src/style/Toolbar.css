@@ -52,3 +52,27 @@
 .HighlightButton.active {
     color: #b958ff;
 }
+
+.FreetextButton,
+.ImageButton,
+.SignatureButton {
+    background: none;
+    color: #f5f5f5;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px;
+    margin-right: 8px;
+    transition: color 0.3s, transform 0.2s;
+}
+
+.FreetextButton:hover,
+.ImageButton:hover,
+.SignatureButton:hover {
+    color: #b958ff;
+    transform: scale(1.05);
+}
+
+.FreetextButton.active {
+    color: #b958ff;
+}

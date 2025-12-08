@@ -87,7 +87,7 @@ export type Content = {
  *
  * @category Type
  */
-export type HighlightType = "text" | "area" | "freetext";
+export type HighlightType = "text" | "area" | "freetext" | "image";
 
 /**
  * This represents a selected (text/mouse) area that has been turned into a

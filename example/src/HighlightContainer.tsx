@@ -3,6 +3,7 @@ import HighlightPopup from "./HighlightPopup";
 import {
   AreaHighlight,
   FreetextHighlight,
+  ImageHighlight,
   MonitoredHighlightContainer,
   TextHighlight,
   Tip,
@@ -83,6 +84,27 @@ const HighlightContainer = ({
         onEditEnd={() => toggleEditInProgress(false)}
       />
     );
+  } else if (highlight.type === "image") {
+    component = (
+      <ImageHighlight
+        highlight={highlight}
+        isScrolledTo={isScrolledTo}
+        bounds={highlightBindings.textLayer}
+        onChange={(boundingRect) => {
+          editHighlight(highlight.id, {
+            position: {
+              boundingRect: viewportToScaled(boundingRect),
+              rects: [],
+            },
+          });
+        }}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+        onEditStart={() => toggleEditInProgress(true)}
+        onEditEnd={() => toggleEditInProgress(false)}
+      />
+    );
   } else {
     // Area highlight (default)
     component = (
@@ -117,9 +139,12 @@ const HighlightContainer = ({
     content: <HighlightPopup highlight={highlight} />,
   };
 
+  // Don't show popup tip for freetext and image highlights
+  const showTip = highlight.type !== "freetext" && highlight.type !== "image";
+
   return (
     <MonitoredHighlightContainer
-      highlightTip={highlight.type !== "freetext" ? highlightTip : undefined}
+      highlightTip={showTip ? highlightTip : undefined}
       key={highlight.id}
       children={component}
     />

@@ -13,6 +13,14 @@ import {
   FreetextHighlightProps,
   FreetextStyle,
 } from "./components/FreetextHighlight";
+import {
+  ImageHighlight,
+  ImageHighlightProps,
+} from "./components/ImageHighlight";
+import {
+  SignaturePad,
+  SignaturePadProps,
+} from "./components/SignaturePad";
 import { PdfLoader, PdfLoaderProps } from "./components/PdfLoader";
 import {
   HighlightContainerUtils,
@@ -35,6 +43,8 @@ export {
   MonitoredHighlightContainer,
   AreaHighlight,
   FreetextHighlight,
+  ImageHighlight,
+  SignaturePad,
   useHighlightContainerContext,
   viewportPositionToScaled,
   scaledPositionToViewport,
@@ -50,6 +60,8 @@ export type {
   AreaHighlightProps,
   FreetextHighlightProps,
   FreetextStyle,
+  ImageHighlightProps,
+  SignaturePadProps,
   PdfLoaderProps,
 };
 export * from "./types";

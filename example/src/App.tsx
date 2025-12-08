@@ -12,6 +12,7 @@ import {
   PdfHighlighterUtils,
   PdfLoader,
   ScaledPosition,
+  SignaturePad,
   Tip,
   ViewportHighlight,
 } from "./react-pdf-highlighter-extended";
@@ -45,9 +46,13 @@ const App = () => {
   );
   const [highlightPen, setHighlightPen] = useState<boolean>(false);
   const [freetextMode, setFreetextMode] = useState<boolean>(false);
+  const [imageMode, setImageMode] = useState<boolean>(false);
+  const [isSignaturePadOpen, setIsSignaturePadOpen] = useState<boolean>(false);
+  const [pendingImageData, setPendingImageData] = useState<string | null>(null);
 
   // Refs for PdfHighlighter utilities
   const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleDocument = () => {
     const urls = [PRIMARY_PDF_URL, SECONDARY_PDF_URL];
@@ -120,6 +125,54 @@ const App = () => {
     setFreetextMode(false); // Exit mode after creating
   };
 
+  const handleImageClick = (position: ScaledPosition) => {
+    console.log("Creating image highlight", position);
+    if (pendingImageData) {
+      const newHighlight: CommentedHighlight = {
+        id: getNextId(),
+        type: "image",
+        position,
+        content: { image: pendingImageData },
+        comment: "",
+      };
+      setHighlights([newHighlight, ...highlights]);
+      setPendingImageData(null);
+      setImageMode(false);
+    }
+  };
+
+  const handleAddImage = () => {
+    // Trigger file input click
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        console.log("Image loaded, entering image mode");
+        setPendingImageData(dataUrl);
+        setImageMode(true);
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset the input so the same file can be selected again
+    event.target.value = "";
+  };
+
+  const handleAddSignature = () => {
+    setIsSignaturePadOpen(true);
+  };
+
+  const handleSignatureComplete = (dataUrl: string) => {
+    console.log("Signature complete, entering image mode");
+    setPendingImageData(dataUrl);
+    setIsSignaturePadOpen(false);
+    setImageMode(true);
+  };
+
   const resetHighlights = () => {
     setHighlights([]);
   };
@@ -189,6 +242,8 @@ const App = () => {
           toggleHighlightPen={() => setHighlightPen(!highlightPen)}
           toggleFreetextMode={() => setFreetextMode(!freetextMode)}
           isFreetextMode={freetextMode}
+          onAddImage={handleAddImage}
+          onAddSignature={handleAddSignature}
         />
         <PdfLoader document={url}>
           {(pdfDocument) => (
@@ -206,6 +261,8 @@ const App = () => {
               highlights={highlights}
               enableFreetextCreation={() => freetextMode}
               onFreetextClick={handleFreetextClick}
+              enableImageCreation={() => imageMode}
+              onImageClick={handleImageClick}
               style={{
                 height: "calc(100% - 41px)",
               }}
@@ -220,6 +277,22 @@ const App = () => {
       </div>
 
       {contextMenu && <ContextMenu {...contextMenu} />}
+
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: "none" }}
+        accept="image/*"
+        onChange={handleFileSelect}
+      />
+
+      {/* Signature pad modal */}
+      <SignaturePad
+        isOpen={isSignaturePadOpen}
+        onComplete={handleSignatureComplete}
+        onClose={() => setIsSignaturePadOpen(false)}
+      />
     </div>
   );
 };

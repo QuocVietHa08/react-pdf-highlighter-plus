@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { Highlight, HighlightType } from "./react-pdf-highlighter-extended";
 import { CommentedHighlight } from "./types";
 import { HighlightFilters, SortOption } from "./components/HighlightFilters";
@@ -6,7 +6,6 @@ import { HighlightCard } from "./components/HighlightCard";
 import { PageGroup } from "./components/PageGroup";
 import { Button } from "./components/ui/button";
 import { ScrollArea } from "./components/ui/scroll-area";
-import { Separator } from "./components/ui/separator";
 import { FileText, RefreshCw, ArrowLeftRight } from "lucide-react";
 import { cn } from "./lib/utils";
 

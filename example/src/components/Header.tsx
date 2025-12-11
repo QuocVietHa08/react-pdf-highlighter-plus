@@ -1,3 +1,4 @@
+import React from "react";
 import { Download, Minus, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";

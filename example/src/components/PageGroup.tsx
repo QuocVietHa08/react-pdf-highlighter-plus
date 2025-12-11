@@ -1,3 +1,4 @@
+import React, { ReactNode, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
   Collapsible,
@@ -6,7 +7,6 @@ import {
 } from "./ui/collapsible";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
-import { ReactNode, useState } from "react";
 
 interface PageGroupProps {
   pageNumber: number;

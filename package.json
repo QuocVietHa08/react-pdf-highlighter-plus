@@ -27,9 +27,10 @@
     "start": "npm run dev",
     "dev": "(cd ./example && vite --force)",
     "build": "npm run clean && npm i && npm run build:esm && npm run build:copy-styles && npm run build:example && npm run build:docs",
+    "build:vercel": "npm run build:esm && npm run build:copy-styles && npm run build:example && npm run build:docs",
     "build:esm": "tsc",
     "build:copy-styles": "cp -r ./src/style ./dist/esm",
-    "build:example": "(cd ./example && tsc && vite build && mkdir \"../public/\" && cp -r example-app ../public/)",
+    "build:example": "(cd ./example && npm install && tsc && vite build && mkdir -p \"../public/\" && cp -r example-app ../public/)",
     "build:docs": "npx typedoc",
     "clean": "rm -rf dist public node_modules package-lock.json"
   },

@@ -413,6 +413,7 @@ function transformToRawCoordinates(
 /**
  * Render an image highlight (embedded image).
  * Handles page rotation by transforming visual coordinates to raw MediaBox space.
+ * Image fills the entire bounding box to match the visual wrapper in preview.
  */
 async function renderImageHighlight(
   pdfDoc: PDFDocument,
@@ -429,7 +430,7 @@ async function renderImageHighlight(
         ? await pdfDoc.embedPng(bytes)
         : await pdfDoc.embedJpg(bytes);
 
-    // Calculate coordinates in visual space
+    // Calculate coordinates in visual space - use full bounding box dimensions
     const visualCoords = scaledToPdfPoints(
       highlight.position.boundingRect,
       page
@@ -450,7 +451,7 @@ async function renderImageHighlight(
       rawCoords,
     });
 
-    // Draw image - no rotation needed, just correct positioning
+    // Draw image filling the entire bounding box
     page.drawImage(image, {
       x: rawCoords.x,
       y: rawCoords.y,

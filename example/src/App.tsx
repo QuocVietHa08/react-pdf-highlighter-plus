@@ -154,16 +154,41 @@ const App = () => {
   const handleImageClick = (position: ScaledPosition) => {
     console.log("Creating image highlight", position);
     if (pendingImageData) {
-      const newHighlight: CommentedHighlight = {
-        id: getNextId(),
-        type: "image",
-        position,
-        content: { image: pendingImageData },
-        comment: "",
+      // Load image to get its natural dimensions
+      const img = new Image();
+      img.onload = () => {
+        const imageAspect = img.naturalWidth / img.naturalHeight;
+        const boundingRect = position.boundingRect;
+
+        // Keep the width from click position, adjust height to maintain aspect ratio
+        const currentWidth = boundingRect.x2 - boundingRect.x1;
+        const adjustedHeight = currentWidth / imageAspect;
+
+        // Create adjusted position with correct aspect ratio
+        const adjustedPosition: ScaledPosition = {
+          ...position,
+          boundingRect: {
+            ...boundingRect,
+            y2: boundingRect.y1 + adjustedHeight,
+          },
+          rects: position.rects.map(rect => ({
+            ...rect,
+            y2: rect.y1 + adjustedHeight,
+          })),
+        };
+
+        const newHighlight: CommentedHighlight = {
+          id: getNextId(),
+          type: "image",
+          position: adjustedPosition,
+          content: { image: pendingImageData },
+          comment: "",
+        };
+        setHighlights([newHighlight, ...highlights]);
+        setPendingImageData(null);
+        setImageMode(false);
       };
-      setHighlights([newHighlight, ...highlights]);
-      setPendingImageData(null);
-      setImageMode(false);
+      img.src = pendingImageData;
     }
   };
 

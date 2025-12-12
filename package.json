@@ -1,7 +1,7 @@
 {
   "name": "react-pdf-highlighter-plus",
   "type": "module",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Set of modern React components for PDF highlighting",
   "author": "Edward Ha <quocvietha08@gmail.com>",
   "license": "MIT",
@@ -32,7 +32,9 @@
       "types": "./dist/esm/index.d.ts",
       "import": "./dist/esm/index.js"
     },
-    "./style/*": "./dist/esm/style/*"
+    "./style/style.css": "./dist/esm/style/style.css",
+    "./style/pdf_viewer.css": "./dist/esm/style/pdf_viewer.css",
+    "./style/*.css": "./dist/esm/style/*.css"
   },
   "scripts": {
     "start": "npm run dev",

@@ -1,0 +1,13 @@
+/* Combined styles for react-pdf-highlighter-plus */
+@import "./pdf_viewer.css";
+@import "./PdfHighlighter.css";
+@import "./MouseSelection.css";
+@import "./TextHighlight.css";
+@import "./AreaHighlight.css";
+@import "./FreetextHighlight.css";
+@import "./ImageHighlight.css";
+@import "./DrawingHighlight.css";
+@import "./DrawingCanvas.css";
+@import "./SignaturePad.css";
+@import "./ShapeCanvas.css";
+@import "./ShapeHighlight.css";

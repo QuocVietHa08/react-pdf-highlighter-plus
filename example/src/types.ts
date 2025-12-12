@@ -11,4 +11,8 @@ export interface CommentedHighlight extends Highlight {
   // Text/Area highlight style properties
   highlightColor?: string;
   highlightStyle?: "highlight" | "underline" | "strikethrough";
+  // Shape highlight style properties
+  shapeType?: "rectangle" | "circle" | "arrow";
+  strokeColor?: string;
+  strokeWidth?: number;
 }

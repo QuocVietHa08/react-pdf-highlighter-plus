@@ -37,6 +37,15 @@ import {
   DrawingHighlight,
   DrawingHighlightProps,
 } from "./components/DrawingHighlight";
+import {
+  ShapeCanvas,
+  ShapeCanvasProps,
+} from "./components/ShapeCanvas";
+import {
+  ShapeHighlight,
+  ShapeHighlightProps,
+  ShapeStyle,
+} from "./components/ShapeHighlight";
 import { PdfLoader, PdfLoaderProps } from "./components/PdfLoader";
 import {
   HighlightContainerUtils,
@@ -68,6 +77,8 @@ export {
   SignaturePad,
   DrawingCanvas,
   DrawingHighlight,
+  ShapeCanvas,
+  ShapeHighlight,
   useHighlightContainerContext,
   viewportPositionToScaled,
   scaledPositionToViewport,
@@ -90,6 +101,9 @@ export type {
   SignaturePadProps,
   DrawingCanvasProps,
   DrawingHighlightProps,
+  ShapeCanvasProps,
+  ShapeHighlightProps,
+  ShapeStyle,
   PdfLoaderProps,
   ExportPdfOptions,
   ExportableHighlight,

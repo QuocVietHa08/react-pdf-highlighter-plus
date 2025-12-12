@@ -14,6 +14,8 @@ import {
   PdfHighlighterUtils,
   PdfLoader,
   ScaledPosition,
+  ShapeData,
+  ShapeType,
   SignaturePad,
   Tip,
   ViewportHighlight,
@@ -57,6 +59,10 @@ const App = () => {
   const [drawingMode, setDrawingMode] = useState<boolean>(false);
   const [drawingStrokeColor, setDrawingStrokeColor] = useState<string>("#000000");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState<number>(3);
+  // Shape mode state
+  const [shapeMode, setShapeMode] = useState<ShapeType | null>(null);
+  const [shapeStrokeColor, setShapeStrokeColor] = useState<string>("#000000");
+  const [shapeStrokeWidth, setShapeStrokeWidth] = useState<number>(2);
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [scrolledToHighlightId, setScrolledToHighlightId] = useState<string | null>(null);
@@ -242,6 +248,27 @@ const App = () => {
     setDrawingMode(false);
   };
 
+  const handleShapeComplete = (position: ScaledPosition, shape: ShapeData) => {
+    console.log("Shape complete", shape.shapeType, position);
+    const newHighlight: CommentedHighlight = {
+      id: getNextId(),
+      type: "shape",
+      position,
+      content: { shape },
+      shapeType: shape.shapeType,
+      strokeColor: shape.strokeColor,
+      strokeWidth: shape.strokeWidth,
+      comment: "",
+    };
+    setHighlights([newHighlight, ...highlights]);
+    setShapeMode(null);
+  };
+
+  const handleShapeCancel = () => {
+    console.log("Shape cancelled");
+    setShapeMode(null);
+  };
+
   const handleExportPdf = async () => {
     console.log("Exporting PDF with annotations...");
     try {
@@ -389,6 +416,11 @@ const App = () => {
                 onDrawingCancel={handleDrawingCancel}
                 drawingStrokeColor={drawingStrokeColor}
                 drawingStrokeWidth={drawingStrokeWidth}
+                enableShapeMode={shapeMode}
+                onShapeComplete={handleShapeComplete}
+                onShapeCancel={handleShapeCancel}
+                shapeStrokeColor={shapeStrokeColor}
+                shapeStrokeWidth={shapeStrokeWidth}
                 style={{
                   height: "100%",
                 }}
@@ -418,6 +450,12 @@ const App = () => {
             onDrawingColorChange={setDrawingStrokeColor}
             drawingStrokeWidth={drawingStrokeWidth}
             onDrawingWidthChange={setDrawingStrokeWidth}
+            shapeMode={shapeMode}
+            onSetShapeMode={setShapeMode}
+            shapeStrokeColor={shapeStrokeColor}
+            onShapeColorChange={setShapeStrokeColor}
+            shapeStrokeWidth={shapeStrokeWidth}
+            onShapeWidthChange={setShapeStrokeWidth}
           />
         </div>
       </div>

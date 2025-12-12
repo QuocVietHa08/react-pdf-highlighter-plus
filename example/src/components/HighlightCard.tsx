@@ -9,6 +9,7 @@ import {
   MessageSquare,
   Trash2,
   Edit,
+  Shapes,
 } from "lucide-react";
 import { Card } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -59,6 +60,11 @@ const typeConfig: Record<
     icon: Pencil,
     label: "Drawing",
     color: "bg-orange-100 text-orange-700",
+  },
+  shape: {
+    icon: Shapes,
+    label: "Shape",
+    color: "bg-pink-100 text-pink-700",
   },
 };
 

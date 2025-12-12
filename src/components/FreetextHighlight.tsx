@@ -415,7 +415,9 @@ export const FreetextHighlight = ({
                 </div>
               </div>
               <div className="FreetextHighlight__style-row">
-                <label>Text Color</label>
+                <label
+
+                >Text Color</label>
                 <div className="FreetextHighlight__color-options">
                   <div className="FreetextHighlight__color-presets">
                     {textColorPresets.map((c) => (

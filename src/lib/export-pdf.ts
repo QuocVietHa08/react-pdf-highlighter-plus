@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from "pdf-lib";
-import type { Scaled, ScaledPosition } from "../types";
+import type { Scaled, ScaledPosition, ShapeData } from "../types";
 
 /**
  * Options for the PDF export function.
@@ -28,10 +28,11 @@ export interface ExportPdfOptions {
  */
 export interface ExportableHighlight {
   id: string;
-  type?: "text" | "area" | "freetext" | "image" | "drawing";
+  type?: "text" | "area" | "freetext" | "image" | "drawing" | "shape";
   content?: {
     text?: string;
     image?: string; // Base64 data URL
+    shape?: ShapeData; // Shape data for shape highlights
   };
   position: ScaledPosition;
   /** Per-highlight color override (for text/area highlights) */
@@ -46,6 +47,12 @@ export interface ExportableHighlight {
   fontSize?: string;
   /** Font family for freetext highlights (not used in export, Helvetica is always used) */
   fontFamily?: string;
+  /** Shape type for shape highlights */
+  shapeType?: "rectangle" | "circle" | "arrow";
+  /** Stroke color for shape highlights */
+  strokeColor?: string;
+  /** Stroke width for shape highlights */
+  strokeWidth?: number;
 }
 
 /**
@@ -495,6 +502,101 @@ async function renderImageHighlight(
 }
 
 /**
+ * Render a shape highlight (rectangle, circle, or arrow).
+ */
+async function renderShapeHighlight(
+  page: PDFPage,
+  highlight: ExportableHighlight
+): Promise<void> {
+  // Get shape data from content or top-level properties
+  const shapeType = highlight.content?.shape?.shapeType || highlight.shapeType || "rectangle";
+  const strokeColorStr = highlight.content?.shape?.strokeColor || highlight.strokeColor || "#000000";
+  const strokeWidth = highlight.content?.shape?.strokeWidth || highlight.strokeWidth || 2;
+
+  const color = parseColor(strokeColorStr);
+  const { x, y, width, height } = scaledToPdfPoints(
+    highlight.position.boundingRect,
+    page
+  );
+
+  switch (shapeType) {
+    case "rectangle":
+      page.drawRectangle({
+        x,
+        y,
+        width,
+        height,
+        borderColor: rgb(color.r, color.g, color.b),
+        borderWidth: strokeWidth,
+        opacity: color.a,
+      });
+      break;
+
+    case "circle":
+      page.drawEllipse({
+        x: x + width / 2,
+        y: y + height / 2,
+        xScale: width / 2,
+        yScale: height / 2,
+        borderColor: rgb(color.r, color.g, color.b),
+        borderWidth: strokeWidth,
+        opacity: color.a,
+      });
+      break;
+
+    case "arrow": {
+      // Use stored start/end points if available, otherwise default to left-to-right
+      const startPt = highlight.content?.shape?.startPoint;
+      const endPt = highlight.content?.shape?.endPoint;
+
+      // Calculate actual coordinates
+      // Note: PDF coordinates have Y going up, so we need to flip the Y
+      const startX = startPt ? x + startPt.x * width : x;
+      const startY = startPt ? y + (1 - startPt.y) * height : y + height / 2;
+      const endX = endPt ? x + endPt.x * width : x + width;
+      const endY = endPt ? y + (1 - endPt.y) * height : y + height / 2;
+
+      // Draw the main line
+      page.drawLine({
+        start: { x: startX, y: startY },
+        end: { x: endX, y: endY },
+        color: rgb(color.r, color.g, color.b),
+        thickness: strokeWidth,
+        opacity: color.a,
+      });
+
+      // Calculate arrowhead direction
+      const angle = Math.atan2(endY - startY, endX - startX);
+      const arrowSize = Math.min(15, width * 0.2, height * 0.4);
+      const arrowAngle = Math.PI / 6; // 30 degrees
+
+      // Draw arrowhead (two lines forming a V at the end)
+      page.drawLine({
+        start: {
+          x: endX - arrowSize * Math.cos(angle - arrowAngle),
+          y: endY - arrowSize * Math.sin(angle - arrowAngle),
+        },
+        end: { x: endX, y: endY },
+        color: rgb(color.r, color.g, color.b),
+        thickness: strokeWidth,
+        opacity: color.a,
+      });
+      page.drawLine({
+        start: {
+          x: endX - arrowSize * Math.cos(angle + arrowAngle),
+          y: endY - arrowSize * Math.sin(angle + arrowAngle),
+        },
+        end: { x: endX, y: endY },
+        color: rgb(color.r, color.g, color.b),
+        thickness: strokeWidth,
+        opacity: color.a,
+      });
+      break;
+    }
+  }
+}
+
+/**
  * Export a PDF with annotations embedded.
  *
  * @param pdfSource - The source PDF as a URL string, Uint8Array, or ArrayBuffer
@@ -571,6 +673,9 @@ export async function exportPdf(
         case "drawing":
           // Drawings are stored as PNG images, reuse image highlight rendering
           await renderImageHighlight(pdfDoc, page, highlight);
+          break;
+        case "shape":
+          await renderShapeHighlight(page, highlight);
           break;
         default:
           // Default to area highlight for backwards compatibility

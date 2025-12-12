@@ -38,12 +38,15 @@ import {
   PdfScaleValue,
   PdfSelection,
   ScaledPosition,
+  ShapeData,
+  ShapeType,
   Tip,
   ViewportPosition,
 } from "../types";
 import { DrawingCanvas } from "./DrawingCanvas";
 import { HighlightLayer } from "./HighlightLayer";
 import { MouseSelection } from "./MouseSelection";
+import { ShapeCanvas } from "./ShapeCanvas";
 import { TipContainer } from "./TipContainer";
 
 import type { EventBus as TEventBus, PDFLinkService as TPDFLinkService, PDFViewer as TPDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
@@ -237,6 +240,36 @@ export interface PdfHighlighterProps {
    * @default 3
    */
   drawingStrokeWidth?: number;
+
+  /**
+   * The type of shape to create, or null if shape mode is not active.
+   */
+  enableShapeMode?: ShapeType | null;
+
+  /**
+   * Callback triggered when a shape is completed.
+   *
+   * @param position - Scaled position of the shape on the page.
+   * @param shape - The shape data (type, color, width).
+   */
+  onShapeComplete?(position: ScaledPosition, shape: ShapeData): void;
+
+  /**
+   * Callback triggered when shape creation is cancelled.
+   */
+  onShapeCancel?(): void;
+
+  /**
+   * Stroke color for shape mode.
+   * @default "#000000"
+   */
+  shapeStrokeColor?: string;
+
+  /**
+   * Stroke width for shape mode.
+   * @default 2
+   */
+  shapeStrokeWidth?: number;
 }
 
 /**
@@ -274,6 +307,11 @@ export const PdfHighlighter = ({
   onDrawingCancel,
   drawingStrokeColor = "#000000",
   drawingStrokeWidth = 3,
+  enableShapeMode,
+  onShapeComplete,
+  onShapeCancel,
+  shapeStrokeColor = "#000000",
+  shapeStrokeWidth = 2,
 }: PdfHighlighterProps) => {
   // State
   const [tip, setTip] = useState<Tip | null>(null);
@@ -686,6 +724,7 @@ export const PdfHighlighter = ({
   if (isFreetextMode) containerClassName += ' PdfHighlighter--freetext-mode';
   if (isImageMode) containerClassName += ' PdfHighlighter--image-mode';
   if (enableDrawingMode) containerClassName += ' PdfHighlighter--drawing-mode';
+  if (enableShapeMode) containerClassName += ' PdfHighlighter--shape-mode';
   if (areaSelectionMode) containerClassName += ' PdfHighlighter--area-mode';
 
   return (
@@ -767,6 +806,23 @@ export const PdfHighlighter = ({
             onCancel={() => {
               console.log("PdfHighlighter: Drawing cancelled");
               onDrawingCancel?.();
+            }}
+          />
+        )}
+        {isViewerReady && enableShapeMode && (
+          <ShapeCanvas
+            isActive={!!enableShapeMode}
+            shapeType={enableShapeMode}
+            strokeColor={shapeStrokeColor}
+            strokeWidth={shapeStrokeWidth}
+            viewer={viewerRef.current!}
+            onComplete={(position, shape) => {
+              console.log("PdfHighlighter: Shape complete", shape.shapeType);
+              onShapeComplete?.(position, shape);
+            }}
+            onCancel={() => {
+              console.log("PdfHighlighter: Shape cancelled");
+              onShapeCancel?.();
             }}
           />
         )}

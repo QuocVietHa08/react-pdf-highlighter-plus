@@ -93,6 +93,28 @@ export type DrawingStroke = {
 };
 
 /**
+ * Shape types for shape annotations.
+ *
+ * @category Type
+ */
+export type ShapeType = "rectangle" | "circle" | "arrow";
+
+/**
+ * Shape data for shape highlights.
+ *
+ * @category Type
+ */
+export type ShapeData = {
+  shapeType: ShapeType;
+  strokeColor: string;
+  strokeWidth: number;
+  /** For arrows: start point as percentage of bounding box (0-1) */
+  startPoint?: { x: number; y: number };
+  /** For arrows: end point as percentage of bounding box (0-1) */
+  endPoint?: { x: number; y: number };
+};
+
+/**
  * The content of a highlight
  *
  * @category Type
@@ -102,6 +124,8 @@ export type Content = {
   image?: string;
   /** For drawing highlights, store the stroke data for later editing */
   strokes?: DrawingStroke[];
+  /** For shape highlights, store the shape data */
+  shape?: ShapeData;
 };
 
 /**
@@ -110,7 +134,7 @@ export type Content = {
  *
  * @category Type
  */
-export type HighlightType = "text" | "area" | "freetext" | "image" | "drawing";
+export type HighlightType = "text" | "area" | "freetext" | "image" | "drawing" | "shape";
 
 /**
  * This represents a selected (text/mouse) area that has been turned into a

@@ -6,6 +6,7 @@ import {
   FreetextHighlight,
   ImageHighlight,
   MonitoredHighlightContainer,
+  ShapeHighlight,
   TextHighlight,
   Tip,
   ViewportHighlight,
@@ -147,6 +148,49 @@ const HighlightContainer = ({
         onDelete={() => deleteHighlight(highlight.id)}
       />
     );
+  } else if (highlight.type === "shape") {
+    component = (
+      <ShapeHighlight
+        highlight={highlight}
+        isScrolledTo={isScrolledTo}
+        bounds={highlightBindings.textLayer}
+        shapeType={highlight.shapeType || highlight.content?.shape?.shapeType || "rectangle"}
+        strokeColor={highlight.strokeColor || highlight.content?.shape?.strokeColor || "#000000"}
+        strokeWidth={highlight.strokeWidth || highlight.content?.shape?.strokeWidth || 2}
+        startPoint={highlight.content?.shape?.startPoint}
+        endPoint={highlight.content?.shape?.endPoint}
+        onChange={(boundingRect) => {
+          editHighlight(highlight.id, {
+            position: {
+              boundingRect: viewportToScaled(boundingRect),
+              rects: [],
+            },
+          });
+        }}
+        onStyleChange={(style) => {
+          console.log("Shape style changed:", style);
+          editHighlight(highlight.id, {
+            strokeColor: style.strokeColor,
+            strokeWidth: style.strokeWidth,
+            content: {
+              ...highlight.content,
+              shape: {
+                ...highlight.content?.shape,
+                shapeType: highlight.shapeType || highlight.content?.shape?.shapeType || "rectangle",
+                strokeColor: style.strokeColor || highlight.strokeColor || "#000000",
+                strokeWidth: style.strokeWidth || highlight.strokeWidth || 2,
+              },
+            },
+          });
+        }}
+        onContextMenu={(event) =>
+          onContextMenu && onContextMenu(event, highlight)
+        }
+        onEditStart={() => toggleEditInProgress(true)}
+        onEditEnd={() => toggleEditInProgress(false)}
+        onDelete={() => deleteHighlight(highlight.id)}
+      />
+    );
   } else {
     // Area highlight (default)
     component = (
@@ -186,8 +230,8 @@ const HighlightContainer = ({
     content: <HighlightPopup highlight={highlight} />,
   };
 
-  // Don't show popup tip for freetext, image, and drawing highlights
-  const showTip = highlight.type !== "freetext" && highlight.type !== "image" && highlight.type !== "drawing";
+  // Don't show popup tip for freetext, image, drawing, and shape highlights
+  const showTip = highlight.type !== "freetext" && highlight.type !== "image" && highlight.type !== "drawing" && highlight.type !== "shape";
 
   return (
     <MonitoredHighlightContainer

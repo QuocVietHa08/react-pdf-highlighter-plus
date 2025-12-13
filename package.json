@@ -1,7 +1,7 @@
 {
   "name": "react-pdf-highlighter-plus",
   "type": "module",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Set of modern React components for PDF highlighting",
   "author": "Edward Ha <quocvietha08@gmail.com>",
   "license": "MIT",
@@ -48,9 +48,9 @@
     "clean": "rm -rf dist public node_modules package-lock.json"
   },
   "peerDependencies": {
+    "pdfjs-dist": "^4.4.168",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "pdfjs-dist": "^4.0.0"
+    "react-dom": "^18.3.1"
   },
   "dependencies": {
     "@radix-ui/react-collapsible": "^1.1.12",

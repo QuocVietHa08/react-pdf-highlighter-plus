@@ -17,10 +17,10 @@ const DEFAULT_ON_ERROR = (error: Error) => {
   throw new Error(`Error loading PDF document: ${error.message}!`);
 };
 
-// Default worker source - uses latest 4.x version
+// Default worker source - uses version 4.4.168
 // Users should provide their own workerSrc matching their pdfjs-dist version for best compatibility
 const DEFAULT_WORKER_SRC =
-  "https://unpkg.com/pdfjs-dist@4/build/pdf.worker.min.mjs";
+  "https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
 
 /**
  * The props type for {@link PdfLoader}.

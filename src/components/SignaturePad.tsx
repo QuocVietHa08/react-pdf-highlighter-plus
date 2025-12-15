@@ -68,8 +68,7 @@ export const SignaturePad = ({
     ctx.lineJoin = "round";
 
     // Clear canvas
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
   }, [isOpen, width, height]);
 
   const getPosition = useCallback(
@@ -173,8 +172,7 @@ export const SignaturePad = ({
     const ctx = canvas?.getContext("2d");
     if (!ctx || !canvas) return;
 
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
   };
 
   const handleDone = () => {

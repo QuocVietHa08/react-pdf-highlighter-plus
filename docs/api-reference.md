@@ -230,6 +230,95 @@ URL.revokeObjectURL(url);
 
 ## PdfHighlighter Props
 
+### Theme
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `theme` | `PdfHighlighterTheme` | Light theme | Theme configuration for light/dark mode |
+
+#### PdfHighlighterTheme
+
+```typescript
+interface PdfHighlighterTheme {
+  /** Theme mode - controls PDF page color inversion */
+  mode?: "light" | "dark";
+
+  /** Background color of the viewer container */
+  containerBackgroundColor?: string;
+
+  /** Scrollbar thumb color */
+  scrollbarThumbColor?: string;
+
+  /** Scrollbar track color */
+  scrollbarTrackColor?: string;
+
+  /**
+   * Inversion intensity for dark mode (0-1).
+   * Lower values create softer dark backgrounds that are easier on the eyes.
+   * - 1.0 = Pure black background (harsh)
+   * - 0.9 = Dark gray ~#1a1a1a (recommended)
+   * - 0.85 = Softer gray ~#262626 (very comfortable)
+   * - 0.8 = Medium gray ~#333333 (maximum softness)
+   * @default 0.9
+   */
+  darkModeInvertIntensity?: number;
+}
+```
+
+#### Default Themes
+
+**Light Theme (default):**
+```typescript
+{
+  mode: "light",
+  containerBackgroundColor: "#e0e0e0",
+  scrollbarThumbColor: "#9f9f9f",
+  scrollbarTrackColor: "#cccccc",
+  darkModeInvertIntensity: 0.9,
+}
+```
+
+**Dark Theme:**
+```typescript
+{
+  mode: "dark",
+  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF (~#1a1a1a) for contrast
+  scrollbarThumbColor: "#6b6b6b",
+  scrollbarTrackColor: "#2c2c2c",
+  darkModeInvertIntensity: 0.9,
+}
+```
+
+#### Example
+
+```tsx
+// Simple dark mode
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  theme={{ mode: "dark" }}
+/>
+
+// Custom theme with softer inversion
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  theme={{
+    mode: "dark",
+    darkModeInvertIntensity: 0.85,
+    containerBackgroundColor: "#2a2a2a",
+  }}
+/>
+
+// Dynamic theme toggle
+const [darkMode, setDarkMode] = useState(false);
+
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  theme={{ mode: darkMode ? "dark" : "light" }}
+/>
+```
+
+---
+
 ### Freetext-related
 
 | Prop | Type | Description |

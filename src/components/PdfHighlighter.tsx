@@ -5,6 +5,7 @@ import React, {
   PointerEventHandler,
   ReactNode,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -61,6 +62,66 @@ let EventBus: typeof TEventBus, PDFLinkService: typeof TPDFLinkService, PDFViewe
 const SCROLL_MARGIN = 10;
 const DEFAULT_SCALE_VALUE = "auto";
 const DEFAULT_TEXT_SELECTION_COLOR = "rgba(153,193,218,255)";
+
+/**
+ * Theme configuration for PdfHighlighter styling.
+ * Controls the appearance of the PDF viewer including dark mode support.
+ *
+ * @category Type
+ */
+export interface PdfHighlighterTheme {
+  /**
+   * Theme mode - controls PDF page color inversion.
+   * In dark mode, PDF pages are inverted for comfortable reading.
+   * @default "light"
+   */
+  mode?: "light" | "dark";
+
+  /**
+   * Background color of the viewer container.
+   * @default "#e5e5e5" for light mode, "#1e1e1e" for dark mode
+   */
+  containerBackgroundColor?: string;
+
+  /**
+   * Scrollbar thumb color.
+   * @default "#9f9f9f" for light mode, "#6b6b6b" for dark mode
+   */
+  scrollbarThumbColor?: string;
+
+  /**
+   * Scrollbar track color.
+   * @default "#d1d1d1" for light mode, "#2c2c2c" for dark mode
+   */
+  scrollbarTrackColor?: string;
+
+  /**
+   * Inversion intensity for dark mode (0-1).
+   * Lower values create softer dark backgrounds that are easier on the eyes.
+   * - 1.0 = Pure black background (harsh)
+   * - 0.9 = Dark gray ~#1a1a1a (recommended)
+   * - 0.85 = Softer gray ~#262626 (very comfortable)
+   * - 0.8 = Medium gray ~#333333 (maximum softness)
+   * @default 0.9
+   */
+  darkModeInvertIntensity?: number;
+}
+
+const defaultLightTheme: Required<PdfHighlighterTheme> = {
+  mode: "light",
+  containerBackgroundColor: "#e5e5e5",
+  scrollbarThumbColor: "#9f9f9f",
+  scrollbarTrackColor: "#d1d1d1",
+  darkModeInvertIntensity: 0.9,
+};
+
+const defaultDarkTheme: Required<PdfHighlighterTheme> = {
+  mode: "dark",
+  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF page (~#1a1a1a) for contrast
+  scrollbarThumbColor: "#6b6b6b",
+  scrollbarTrackColor: "#2c2c2c",
+  darkModeInvertIntensity: 0.9,
+};
 
 const findOrCreateHighlightLayer = (textLayer: HTMLElement) => {
   return findOrCreateContainerLayer(
@@ -266,6 +327,14 @@ export interface PdfHighlighterProps {
    * @default 2
    */
   shapeStrokeWidth?: number;
+
+  /**
+   * Theme configuration for the PDF viewer.
+   * Controls container background color and PDF page color inversion for dark mode.
+   *
+   * @default { mode: "light" }
+   */
+  theme?: PdfHighlighterTheme;
 }
 
 /**
@@ -308,7 +377,15 @@ export const PdfHighlighter = ({
   onShapeCancel,
   shapeStrokeColor = "#000000",
   shapeStrokeWidth = 2,
+  theme: userTheme,
 }: PdfHighlighterProps) => {
+  // Resolve theme with defaults based on mode
+  const resolvedTheme = useMemo(() => {
+    const mode = userTheme?.mode ?? "light";
+    const defaults = mode === "light" ? defaultLightTheme : defaultDarkTheme;
+    return { ...defaults, ...userTheme, mode };
+  }, [userTheme]);
+
   // State
   const [tip, setTip] = useState<Tip | null>(null);
   const [isViewerReady, setIsViewerReady] = useState(false);
@@ -707,6 +784,11 @@ export const PdfHighlighter = ({
     getTip: () => tip,
     setTip,
     updateTipPosition: updateTipPositionRef.current,
+    getLinkService: () => linkServiceRef.current,
+    getEventBus: () => eventBusRef.current,
+    goToPage: (pageNumber: number) => {
+      viewerRef.current?.scrollPageIntoView({ pageNumber });
+    },
   };
 
   utilsRef(pdfHighlighterUtils);
@@ -715,13 +797,20 @@ export const PdfHighlighter = ({
   const isFreetextMode = enableFreetextCreation?.({} as MouseEvent) ?? false;
   const isImageMode = enableImageCreation?.({} as MouseEvent) ?? false;
 
-  // Build class name based on active modes
+  // Build class name based on active modes and theme
   let containerClassName = 'PdfHighlighter';
+  if (resolvedTheme.mode === 'dark') containerClassName += ' PdfHighlighter--dark';
   if (isFreetextMode) containerClassName += ' PdfHighlighter--freetext-mode';
   if (isImageMode) containerClassName += ' PdfHighlighter--image-mode';
   if (enableDrawingMode) containerClassName += ' PdfHighlighter--drawing-mode';
   if (enableShapeMode) containerClassName += ' PdfHighlighter--shape-mode';
   if (areaSelectionMode) containerClassName += ' PdfHighlighter--area-mode';
+
+  // Merge user style with theme background
+  const containerStyle: CSSProperties = {
+    ...style,
+    backgroundColor: resolvedTheme.containerBackgroundColor,
+  };
 
   return (
     <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
@@ -730,7 +819,7 @@ export const PdfHighlighter = ({
         className={containerClassName}
         onPointerDown={handleMouseDown}
         onPointerUp={handleMouseUp}
-        style={style}
+        style={containerStyle}
       >
         <div className="pdfViewer" />
         <style>
@@ -738,6 +827,21 @@ export const PdfHighlighter = ({
           .textLayer ::selection {
             background: ${textSelectionColor};
           }
+          .PdfHighlighter::-webkit-scrollbar-thumb {
+            background-color: ${resolvedTheme.scrollbarThumbColor};
+          }
+          .PdfHighlighter::-webkit-scrollbar-track,
+          .PdfHighlighter::-webkit-scrollbar-track-piece {
+            background-color: ${resolvedTheme.scrollbarTrackColor};
+          }
+          ${resolvedTheme.mode === 'dark' ? `
+          .PdfHighlighter--dark .page {
+            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(1.05);
+          }
+          .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
+            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(0.95);
+          }
+          ` : ''}
         `}
         </style>
         {isViewerReady && (

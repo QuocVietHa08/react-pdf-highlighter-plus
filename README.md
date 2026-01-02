@@ -39,6 +39,7 @@
 | **Images & Signatures** | Upload images or draw signatures directly on PDFs |
 | **Freehand Drawing** | Draw freehand annotations with customizable stroke |
 | **PDF Export** | Export annotated PDF with all highlights embedded |
+| **Light/Dark Theme** | Eye-friendly dark mode with customizable intensity |
 | **Zoom Support** | Full zoom functionality with position-independent data |
 | **Fully Customizable** | Exposed styling on all components |
 
@@ -234,6 +235,55 @@ import { DrawingHighlight } from "react-pdf-highlighter-plus";
 - Drag to reposition
 
 [Full Documentation →](docs/drawing-highlights.md)
+
+---
+
+## Light/Dark Theme
+
+Toggle between light and dark modes with customizable styling for comfortable reading.
+
+```tsx
+// Enable dark mode
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  theme={{ mode: "dark" }}
+  highlights={highlights}
+>
+  <HighlightContainer />
+</PdfHighlighter>
+
+// Customize dark mode intensity and colors
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  theme={{
+    mode: "dark",
+    darkModeInvertIntensity: 0.85,  // Softer (0.8-1.0)
+    containerBackgroundColor: "#3a3a3a",
+    scrollbarThumbColor: "#6b6b6b",
+    scrollbarTrackColor: "#2c2c2c",
+  }}
+  highlights={highlights}
+>
+  <HighlightContainer />
+</PdfHighlighter>
+```
+
+**Features:**
+- Eye-friendly dark mode using CSS filter inversion
+- Customizable inversion intensity (0.8-1.0)
+- Preserve original highlight colors in dark mode
+- Custom scrollbar styling
+- Full theming control for container background
+
+**Inversion Intensity Guide:**
+| Value | Result | Use Case |
+|-------|--------|----------|
+| `1.0` | Pure black | High contrast |
+| `0.9` | Dark gray (~#1a1a1a) | **Recommended** |
+| `0.85` | Softer gray (~#262626) | Long reading sessions |
+| `0.8` | Medium gray (~#333333) | Maximum comfort |
+
+[Full Documentation →](docs/theming.md)
 
 ---
 

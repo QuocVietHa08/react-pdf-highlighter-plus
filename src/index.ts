@@ -1,6 +1,7 @@
 import {
   PdfHighlighter,
   PdfHighlighterProps,
+  PdfHighlighterTheme,
 } from "./components/PdfHighlighter";
 import {
   TextHighlight,
@@ -66,6 +67,49 @@ import {
   usePdfHighlighterContext,
 } from "./contexts/PdfHighlighterContext";
 
+// Left Panel components
+import {
+  LeftPanel,
+  LeftPanelProps,
+  LeftPanelTheme,
+  TabStyles,
+  TabClassNames,
+  FooterStyles,
+  FooterClassNames,
+  ToggleButtonStyles,
+  ToggleButtonClassNames,
+} from "./components/leftpanel/LeftPanel";
+import {
+  DocumentOutline,
+  DocumentOutlineProps,
+  DocumentOutlineStyles,
+  DocumentOutlineClassNames,
+} from "./components/leftpanel/DocumentOutline";
+import {
+  ThumbnailPanel,
+  ThumbnailPanelProps,
+} from "./components/leftpanel/ThumbnailPanel";
+import {
+  ThumbnailItem,
+  ThumbnailItemProps,
+} from "./components/leftpanel/ThumbnailItem";
+import {
+  OutlineItem,
+  OutlineItemProps,
+  OutlineItemRenderProps,
+  OutlineItemStyles,
+  OutlineItemClassNames,
+} from "./components/leftpanel/OutlineItem";
+import {
+  LeftPanelUtils,
+  useLeftPanelContext,
+} from "./contexts/LeftPanelContext";
+
+// Left Panel hooks
+import { useDocumentOutline } from "./hooks/useDocumentOutline";
+import { useThumbnails } from "./hooks/useThumbnails";
+import { usePageNavigation } from "./hooks/usePageNavigation";
+
 export {
   PdfHighlighter,
   PdfLoader,
@@ -84,12 +128,23 @@ export {
   scaledPositionToViewport,
   usePdfHighlighterContext,
   exportPdf,
+  // Left Panel
+  LeftPanel,
+  DocumentOutline,
+  ThumbnailPanel,
+  ThumbnailItem,
+  OutlineItem,
+  useLeftPanelContext,
+  useDocumentOutline,
+  useThumbnails,
+  usePageNavigation,
 };
 
 export type {
   HighlightContainerUtils,
   PdfHighlighterUtils,
   PdfHighlighterProps,
+  PdfHighlighterTheme,
   TextHighlightProps,
   TextHighlightStyle,
   MonitoredHighlightContainerProps,
@@ -107,5 +162,24 @@ export type {
   PdfLoaderProps,
   ExportPdfOptions,
   ExportableHighlight,
+  // Left Panel types
+  LeftPanelProps,
+  LeftPanelTheme,
+  TabStyles,
+  TabClassNames,
+  FooterStyles,
+  FooterClassNames,
+  ToggleButtonStyles,
+  ToggleButtonClassNames,
+  DocumentOutlineProps,
+  DocumentOutlineStyles,
+  DocumentOutlineClassNames,
+  ThumbnailPanelProps,
+  ThumbnailItemProps,
+  OutlineItemProps,
+  OutlineItemRenderProps,
+  OutlineItemStyles,
+  OutlineItemClassNames,
+  LeftPanelUtils,
 };
 export * from "./types";

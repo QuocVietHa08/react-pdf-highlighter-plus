@@ -89,6 +89,27 @@ export type PdfHighlighterUtils = {
    * the tip is visible above/below its highlight.
    */
   updateTipPosition(): void;
+
+  /**
+   * Get the PDF link service instance for navigation.
+   *
+   * @returns - The currently active PDF link service or null.
+   */
+  getLinkService(): unknown | null;
+
+  /**
+   * Get the event bus instance for page events.
+   *
+   * @returns - The currently active event bus or null.
+   */
+  getEventBus(): unknown | null;
+
+  /**
+   * Navigate to a specific page number.
+   *
+   * @param pageNumber - 1-indexed page number to navigate to.
+   */
+  goToPage(pageNumber: number): void;
 };
 
 export const PdfHighlighterContext = createContext<

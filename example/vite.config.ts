@@ -1,8 +1,8 @@
 import { defineConfig } from "vite";
 import reactRefresh from "@vitejs/plugin-react";
 
-export default defineConfig({
-  base: "/react-pdf-highlighter-plus/example-app/",
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? "/react-pdf-highlighter-plus/example-app/" : "/",
   build: {
     target: "esnext",
     outDir: "example-app",
@@ -19,4 +19,4 @@ export default defineConfig({
   define: {
     APP_VERSION: JSON.stringify(process.env.npm_package_version),
   },
-});
+}));

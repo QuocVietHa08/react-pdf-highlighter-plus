@@ -10,6 +10,7 @@ import {
   DrawingStroke,
   GhostHighlight,
   Highlight,
+  LeftPanel,
   PdfHighlighter,
   PdfHighlighterUtils,
   PdfLoader,
@@ -66,9 +67,15 @@ const App = () => {
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [scrolledToHighlightId, setScrolledToHighlightId] = useState<string | null>(null);
+  // Left panel state
+  const [leftPanelOpen, setLeftPanelOpen] = useState<boolean>(true);
+  // Dark mode state
+  const [darkMode, setDarkMode] = useState<boolean>(false);
 
   // Refs for PdfHighlighter utilities
-  const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
+  const highlighterUtilsRef = useRef<PdfHighlighterUtils | null>(null);
+  const hasInitializedUtilsRef = useRef(false);
+  const [, forceUpdate] = useState({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleDocument = () => {
@@ -372,6 +379,8 @@ const App = () => {
         onExportPdf={handleExportPdf}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(!darkMode)}
       />
 
       {/* Main content */}
@@ -387,50 +396,79 @@ const App = () => {
           isOpen={sidebarOpen}
         />
 
-        {/* PDF Viewer */}
-        <div className="relative flex-1 overflow-hidden">
+        {/* PDF Viewer with Left Panel */}
+        <div className="relative flex-1 overflow-hidden flex h-full">
           <PdfLoader document={url}>
             {(pdfDocument) => (
-              <PdfHighlighter
-                enableAreaSelection={(event) => event.altKey || areaMode}
-                areaSelectionMode={areaMode}
-                pdfDocument={pdfDocument}
-                onScrollAway={resetHash}
-                utilsRef={(_pdfHighlighterUtils) => {
-                  highlighterUtilsRef.current = _pdfHighlighterUtils;
-                }}
-                pdfScaleValue={pdfScaleValue}
-                textSelectionColor={highlightPen ? "rgba(255, 226, 143, 1)" : undefined}
-                onSelection={(highlightPen || areaMode) ? (selection) => {
-                  addHighlight(selection.makeGhostHighlight(), "");
-                  if (areaMode) setAreaMode(false);
-                } : undefined}
-                selectionTip={highlightPen ? undefined : <ExpandableTip addHighlight={addHighlight} />}
-                highlights={highlights}
-                enableFreetextCreation={() => freetextMode}
-                onFreetextClick={handleFreetextClick}
-                enableImageCreation={() => imageMode}
-                onImageClick={handleImageClick}
-                enableDrawingMode={drawingMode}
-                onDrawingComplete={handleDrawingComplete}
-                onDrawingCancel={handleDrawingCancel}
-                drawingStrokeColor={drawingStrokeColor}
-                drawingStrokeWidth={drawingStrokeWidth}
-                enableShapeMode={shapeMode}
-                onShapeComplete={handleShapeComplete}
-                onShapeCancel={handleShapeCancel}
-                shapeStrokeColor={shapeStrokeColor}
-                shapeStrokeWidth={shapeStrokeWidth}
-                style={{
-                  height: "100%",
-                }}
-              >
-                <HighlightContainer
-                  editHighlight={editHighlight}
-                  deleteHighlight={(id) => deleteHighlight({ id } as Highlight)}
-                  onContextMenu={handleContextMenu}
+              <div className="flex h-full w-full">
+                {/* Left Panel - Outline & Thumbnails */}
+                <LeftPanel
+                  pdfDocument={pdfDocument}
+                  viewer={highlighterUtilsRef.current?.getViewer()}
+                  linkService={highlighterUtilsRef.current?.getLinkService()}
+                  eventBus={highlighterUtilsRef.current?.getEventBus()}
+                  isOpen={leftPanelOpen}
+                  onOpenChange={setLeftPanelOpen}
+                  width={280}
+                  defaultTab="thumbnails"
                 />
-              </PdfHighlighter>
+
+                {/* PDF Highlighter */}
+                <div className="flex-1 relative overflow-hidden">
+                  <PdfHighlighter
+                    enableAreaSelection={(event) => event.altKey || areaMode}
+                    areaSelectionMode={areaMode}
+                    pdfDocument={pdfDocument}
+                    theme={{ mode: darkMode ? "dark" : "light" }}
+                    onScrollAway={resetHash}
+                    utilsRef={(_pdfHighlighterUtils) => {
+                      highlighterUtilsRef.current = _pdfHighlighterUtils;
+                      // Only force update once on initial setup
+                      if (!hasInitializedUtilsRef.current) {
+                        hasInitializedUtilsRef.current = true;
+                        forceUpdate({});
+                      }
+                    }}
+                    pdfScaleValue={pdfScaleValue}
+                    textSelectionColor={highlightPen ? "rgba(255, 226, 143, 1)" : undefined}
+                    onSelection={highlightPen ? (selection) => {
+                      addHighlight(selection.makeGhostHighlight(), "");
+                    } : undefined}
+                    selectionTip={highlightPen ? undefined : (
+                      <ExpandableTip
+                        addHighlight={(highlight, comment) => {
+                          addHighlight(highlight, comment);
+                          if (areaMode) setAreaMode(false);
+                        }}
+                      />
+                    )}
+                    highlights={highlights}
+                    enableFreetextCreation={() => freetextMode}
+                    onFreetextClick={handleFreetextClick}
+                    enableImageCreation={() => imageMode}
+                    onImageClick={handleImageClick}
+                    enableDrawingMode={drawingMode}
+                    onDrawingComplete={handleDrawingComplete}
+                    onDrawingCancel={handleDrawingCancel}
+                    drawingStrokeColor={drawingStrokeColor}
+                    drawingStrokeWidth={drawingStrokeWidth}
+                    enableShapeMode={shapeMode}
+                    onShapeComplete={handleShapeComplete}
+                    onShapeCancel={handleShapeCancel}
+                    shapeStrokeColor={shapeStrokeColor}
+                    shapeStrokeWidth={shapeStrokeWidth}
+                    style={{
+                      height: "100%",
+                    }}
+                  >
+                    <HighlightContainer
+                      editHighlight={editHighlight}
+                      deleteHighlight={(id) => deleteHighlight({ id } as Highlight)}
+                      onContextMenu={handleContextMenu}
+                    />
+                  </PdfHighlighter>
+                </div>
+              </div>
             )}
           </PdfLoader>
 

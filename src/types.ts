@@ -236,3 +236,60 @@ export type PdfScaleValue =
   | "page-fit"
   | "auto"
   | number;
+
+// ============================================
+// Left Panel Types
+// ============================================
+
+/**
+ * PDF document outline item structure from PDF.js
+ *
+ * @category Type
+ */
+export interface OutlineItem {
+  title: string;
+  bold: boolean;
+  italic: boolean;
+  color: Uint8ClampedArray;
+  dest: string | unknown[] | null;
+  url: string | null;
+  unsafeUrl?: string;
+  newWindow?: boolean;
+  count?: number;
+  items: OutlineItem[];
+}
+
+/**
+ * Processed outline item with page number resolved
+ *
+ * @category Type
+ */
+export interface ProcessedOutlineItem {
+  id: string;
+  title: string;
+  pageNumber: number;
+  dest: string | unknown[] | null;
+  level: number;
+  bold: boolean;
+  italic: boolean;
+  children: ProcessedOutlineItem[];
+}
+
+/**
+ * Thumbnail data for a single page
+ *
+ * @category Type
+ */
+export interface ThumbnailData {
+  pageNumber: number;
+  dataUrl: string | null;
+  isLoading: boolean;
+  error?: string;
+}
+
+/**
+ * Left panel tab options
+ *
+ * @category Type
+ */
+export type LeftPanelTab = 'outline' | 'thumbnails';

@@ -1,5 +1,5 @@
 import React from "react";
-import { Download, Minus, PanelLeftClose, PanelLeft, Plus } from "lucide-react";
+import { Download, Minus, Moon, PanelLeftClose, PanelLeft, Plus, Sun } from "lucide-react";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import {
@@ -16,6 +16,8 @@ interface HeaderProps {
   onExportPdf: () => void;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
 }
 
 export function Header({
@@ -25,6 +27,8 @@ export function Header({
   onExportPdf,
   sidebarOpen,
   onToggleSidebar,
+  darkMode,
+  onToggleDarkMode,
 }: HeaderProps) {
   const displayZoom = pdfScaleValue
     ? `${Math.round(pdfScaleValue * 100)}%`
@@ -103,6 +107,29 @@ export function Header({
               <TooltipContent>Zoom in</TooltipContent>
             </Tooltip>
           </div>
+
+          <Separator orientation="vertical" className="h-6" />
+
+          {/* Dark mode toggle */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onToggleDarkMode}
+                className="h-9 w-9"
+              >
+                {darkMode ? (
+                  <Sun className="h-5 w-5" />
+                ) : (
+                  <Moon className="h-5 w-5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {darkMode ? "Light mode" : "Dark mode"}
+            </TooltipContent>
+          </Tooltip>
 
           <Separator orientation="vertical" className="h-6" />
 

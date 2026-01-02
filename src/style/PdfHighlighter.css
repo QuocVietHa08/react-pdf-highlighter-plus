@@ -3,7 +3,7 @@
   overflow: auto;
   width: 100%;
   height: 100%;
-  background-color: #333;
+  /* background-color is now controlled via inline style for theming */
 }
 
 /* Style the scrollbar */
@@ -74,4 +74,18 @@
 .PdfHighlighter--area-mode .pdfViewer,
 .PdfHighlighter--area-mode .textLayer {
   cursor: crosshair;
+}
+
+/* Dark mode - softer inversion for comfortable reading
+   Uses 0.9 intensity by default for a dark gray (~#1a1a1a) instead of pure black.
+   The brightness adjustment helps maintain readability.
+   Note: These are fallback values - actual intensity is controlled via inline styles
+   when darkModeInvertIntensity is customized in the theme prop. */
+.PdfHighlighter--dark .page {
+  filter: invert(0.9) hue-rotate(180deg) brightness(1.05);
+}
+
+/* Double-invert highlights to preserve their original colors */
+.PdfHighlighter--dark .PdfHighlighter__highlight-layer {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
 }

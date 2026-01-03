@@ -243,7 +243,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     linkService,
   });
 
-  const { getThumbnail, loadThumbnail, totalPages } = useThumbnails({
+  const { thumbnails, loadThumbnail, totalPages } = useThumbnails({
     pdfDocument,
     thumbnailWidth,
   });
@@ -282,7 +282,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
       outline,
       hasOutline,
       isOutlineLoading,
-      getThumbnail,
+      thumbnails,
       loadThumbnail,
       activeTab,
       setActiveTab,
@@ -298,7 +298,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
       outline,
       hasOutline,
       isOutlineLoading,
-      getThumbnail,
+      thumbnails,
       loadThumbnail,
       activeTab,
       isOpen,
@@ -513,7 +513,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
               <ThumbnailPanel
                 totalPages={totalPages}
                 currentPage={currentPage}
-                getThumbnail={getThumbnail}
+                thumbnails={thumbnails}
                 loadThumbnail={loadThumbnail}
                 onPageSelect={handlePageSelect}
                 renderThumbnail={renderThumbnail}

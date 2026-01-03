@@ -4,6 +4,7 @@ import React, {
   CSSProperties,
   PointerEventHandler,
   ReactNode,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -791,7 +792,14 @@ export const PdfHighlighter = ({
     },
   };
 
-  utilsRef(pdfHighlighterUtils);
+  // Only call utilsRef once when viewer is ready to prevent infinite re-render loop
+  const utilsRefCalledRef = useRef(false);
+  useEffect(() => {
+    if (viewerRef.current && !utilsRefCalledRef.current) {
+      utilsRefCalledRef.current = true;
+      utilsRef(pdfHighlighterUtils);
+    }
+  }, [pdfHighlighterUtils, utilsRef]);
 
   // Check if freetext or image mode is active for cursor styling
   const isFreetextMode = enableFreetextCreation?.({} as MouseEvent) ?? false;

@@ -1,5 +1,5 @@
-import React from "react";
-import { Download, Minus, Moon, PanelLeftClose, PanelLeft, Plus, Sun } from "lucide-react";
+import React, { useRef } from "react";
+import { Download, Minus, Moon, PanelLeftClose, PanelLeft, Plus, Sun, Upload } from "lucide-react";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import {
@@ -18,6 +18,7 @@ interface HeaderProps {
   onToggleSidebar: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  onLoadLocalPdf?: (file: File) => void;
 }
 
 export function Header({
@@ -29,10 +30,21 @@ export function Header({
   onToggleSidebar,
   darkMode,
   onToggleDarkMode,
+  onLoadLocalPdf,
 }: HeaderProps) {
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const displayZoom = pdfScaleValue
     ? `${Math.round(pdfScaleValue * 100)}%`
     : "Auto";
+
+  const handlePdfFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onLoadLocalPdf) {
+      onLoadLocalPdf(file);
+    }
+    // Reset so same file can be selected again
+    event.target.value = "";
+  };
 
   return (
     <TooltipProvider>
@@ -133,6 +145,21 @@ export function Header({
 
           <Separator orientation="vertical" className="h-6" />
 
+          {/* Open local PDF button */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => pdfInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Open PDF
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Open a local PDF file</TooltipContent>
+          </Tooltip>
+
           {/* Export button */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -144,6 +171,15 @@ export function Header({
             <TooltipContent>Export PDF with annotations</TooltipContent>
           </Tooltip>
         </div>
+
+        {/* Hidden file input for PDF upload */}
+        <input
+          type="file"
+          ref={pdfInputRef}
+          style={{ display: "none" }}
+          accept="application/pdf"
+          onChange={handlePdfFileChange}
+        />
       </header>
     </TooltipProvider>
   );

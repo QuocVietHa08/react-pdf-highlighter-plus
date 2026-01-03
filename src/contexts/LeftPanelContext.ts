@@ -19,7 +19,7 @@ export interface LeftPanelUtils {
   isOutlineLoading: boolean;
 
   // Thumbnails
-  getThumbnail: (pageNumber: number) => ThumbnailData;
+  thumbnails: Map<number, ThumbnailData>;
   loadThumbnail: (pageNumber: number) => Promise<void>;
 
   // Panel state

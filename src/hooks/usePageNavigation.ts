@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 interface PDFViewer {
   scrollPageIntoView: (params: { pageNumber: number }) => void;
@@ -22,6 +22,16 @@ interface UsePageNavigationResult {
   goToPage: (pageNumber: number) => void;
 }
 
+// Type guard for EventBus
+const isEventBus = (obj: unknown): obj is EventBus => {
+  return obj !== null && typeof obj === 'object' && 'on' in obj && 'off' in obj;
+};
+
+// Type guard for PDFViewer
+const isViewer = (obj: unknown): obj is PDFViewer => {
+  return obj !== null && typeof obj === 'object' && 'scrollPageIntoView' in obj;
+};
+
 /**
  * Hook for tracking current page and navigating to pages
  *
@@ -34,16 +44,11 @@ export function usePageNavigation(
   const { viewer, eventBus } = options;
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Type guard for EventBus
-  const isEventBus = (obj: unknown): obj is EventBus => {
-    return obj !== null && typeof obj === 'object' && 'on' in obj && 'off' in obj;
-  };
+  // Store viewer ref for stable goToPage callback
+  const viewerRef = useRef(viewer);
+  viewerRef.current = viewer;
 
-  // Type guard for PDFViewer
-  const isViewer = (obj: unknown): obj is PDFViewer => {
-    return obj !== null && typeof obj === 'object' && 'scrollPageIntoView' in obj;
-  };
-
+  // Subscribe to page changes when eventBus is available
   useEffect(() => {
     if (!eventBus || !isEventBus(eventBus)) return;
 
@@ -58,21 +63,30 @@ export function usePageNavigation(
     };
   }, [eventBus]);
 
-  // Sync with viewer's current page on mount
+  // Sync with viewer's current page when viewer first becomes available
+  const syncedRef = useRef(false);
   useEffect(() => {
-    if (viewer && isViewer(viewer) && viewer.currentPageNumber) {
+    if (viewer && isViewer(viewer) && viewer.currentPageNumber && !syncedRef.current) {
       setCurrentPage(viewer.currentPageNumber);
+      syncedRef.current = true;
     }
   }, [viewer]);
 
+  // Stable goToPage callback using ref
   const goToPage = useCallback(
     (pageNumber: number) => {
+      const v = viewerRef.current;
       // Try viewer-based navigation first
-      if (viewer && isViewer(viewer)) {
-        const totalPages = viewer.pagesCount || 0;
+      if (v && isViewer(v)) {
+        const totalPages = v.pagesCount || 0;
         if (pageNumber >= 1 && pageNumber <= totalPages) {
-          viewer.scrollPageIntoView({ pageNumber });
-          return;
+          try {
+            v.scrollPageIntoView({ pageNumber });
+            return;
+          } catch (e) {
+            // Fallback to DOM-based navigation if viewer scroll fails
+            // (e.g., "offsetParent is not set" error)
+          }
         }
       }
 
@@ -86,7 +100,7 @@ export function usePageNavigation(
         setCurrentPage(pageNumber);
       }
     },
-    [viewer]
+    []  // No deps - uses refs
   );
 
   const totalPages = viewer && isViewer(viewer) ? viewer.pagesCount || 0 : 0;

@@ -15,8 +15,9 @@ export interface ThumbnailItemProps {
 /**
  * Single thumbnail item with lazy loading via IntersectionObserver.
  * Clean, minimal design with smooth hover and active states.
+ * Memoized to prevent unnecessary re-renders in virtualized lists.
  */
-export const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
+export const ThumbnailItem = React.memo<ThumbnailItemProps>(({
   pageNumber,
   thumbnail,
   isActive,
@@ -66,17 +67,19 @@ export const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    padding: '8px',
+    padding: '6px',
     cursor: 'pointer',
-    borderRadius: '8px',
+    borderRadius: '6px',
     transition: 'all 0.15s ease',
     backgroundColor: isActive ? 'rgba(59, 130, 246, 0.08)' : isHovered ? 'rgba(0, 0, 0, 0.03)' : 'transparent',
     border: isActive ? '2px solid #3b82f6' : '2px solid transparent',
   };
 
+  // Image wrapper - width 90%, height auto with aspect ratio
   const imageContainerStyle: React.CSSProperties = {
     position: 'relative',
-    width: '100%',
+    width: '85%',
+    aspectRatio: '8.5 / 11', // Standard page aspect ratio
     backgroundColor: '#ffffff',
     borderRadius: '4px',
     overflow: 'hidden',
@@ -85,13 +88,12 @@ export const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
       : isHovered
         ? '0 4px 12px rgba(0, 0, 0, 0.12)'
         : '0 1px 3px rgba(0, 0, 0, 0.08)',
-    aspectRatio: '8.5 / 11',
     transition: 'box-shadow 0.15s ease',
   };
 
   const pageNumberStyle: React.CSSProperties = {
-    marginTop: '8px',
-    fontSize: '12px',
+    marginTop: '6px',
+    fontSize: '11px',
     fontWeight: 500,
     color: isActive ? '#3b82f6' : '#6b7280',
     transition: 'color 0.15s ease',
@@ -206,4 +208,4 @@ export const ThumbnailItem: React.FC<ThumbnailItemProps> = ({
       )}
     </div>
   );
-};
+});

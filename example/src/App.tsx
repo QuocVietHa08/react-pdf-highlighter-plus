@@ -41,7 +41,7 @@ const resetHash = () => {
 };
 
 const App = () => {
-  const [url, setUrl] = useState(PRIMARY_PDF_URL);
+  const [url, setUrl] = useState<string | Uint8Array>(PRIMARY_PDF_URL);
   const [highlights, setHighlights] = useState<Array<CommentedHighlight>>(
     TEST_HIGHLIGHTS[PRIMARY_PDF_URL] ?? [],
   );
@@ -74,8 +74,8 @@ const App = () => {
 
   // Refs for PdfHighlighter utilities
   const highlighterUtilsRef = useRef<PdfHighlighterUtils | null>(null);
-  const hasInitializedUtilsRef = useRef(false);
   const [, forceUpdate] = useState({});
+  const hasInitializedUtilsRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleDocument = () => {
@@ -83,6 +83,23 @@ const App = () => {
     currentPdfIndexRef.current = (currentPdfIndexRef.current + 1) % urls.length;
     setUrl(urls[currentPdfIndexRef.current]);
     setHighlights(TEST_HIGHLIGHTS[urls[currentPdfIndexRef.current]] ?? []);
+  };
+
+  const handleLoadLocalPdf = (file: File) => {
+    console.log(`Loading local PDF: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const arrayBuffer = e.target?.result as ArrayBuffer;
+      const uint8Array = new Uint8Array(arrayBuffer);
+      setUrl(uint8Array);
+      setHighlights([]); // Clear highlights for new document
+      console.log(`PDF loaded: ${file.name}`);
+    };
+    reader.onerror = () => {
+      console.error("Failed to read PDF file");
+      alert("Failed to read PDF file");
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   // Click listeners for context menu
@@ -381,6 +398,7 @@ const App = () => {
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
+        onLoadLocalPdf={handleLoadLocalPdf}
       />
 
       {/* Main content */}
@@ -423,7 +441,7 @@ const App = () => {
                     onScrollAway={resetHash}
                     utilsRef={(_pdfHighlighterUtils) => {
                       highlighterUtilsRef.current = _pdfHighlighterUtils;
-                      // Only force update once on initial setup
+                      // Only force update ONCE to prevent infinite re-render loop
                       if (!hasInitializedUtilsRef.current) {
                         hasInitializedUtilsRef.current = true;
                         forceUpdate({});

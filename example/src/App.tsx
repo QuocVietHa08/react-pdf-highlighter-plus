@@ -78,6 +78,11 @@ const App = () => {
   const hasInitializedUtilsRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Reset utils initialization flag when URL changes so forceUpdate triggers again
+  useEffect(() => {
+    hasInitializedUtilsRef.current = false;
+  }, [url]);
+
   const toggleDocument = () => {
     const urls = [PRIMARY_PDF_URL, SECONDARY_PDF_URL];
     currentPdfIndexRef.current = (currentPdfIndexRef.current + 1) % urls.length;
@@ -425,6 +430,7 @@ const App = () => {
                   viewer={highlighterUtilsRef.current?.getViewer()}
                   linkService={highlighterUtilsRef.current?.getLinkService()}
                   eventBus={highlighterUtilsRef.current?.getEventBus()}
+                  goToPage={highlighterUtilsRef.current?.goToPage}
                   isOpen={leftPanelOpen}
                   onOpenChange={setLeftPanelOpen}
                   width={280}

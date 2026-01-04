@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { List, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { LeftPanelContext, LeftPanelUtils } from '../../contexts/LeftPanelContext';
@@ -119,6 +119,8 @@ export interface LeftPanelProps {
   linkService?: PDFLinkService | unknown | null;
   /** Event bus for page change events */
   eventBus?: EventBus | unknown | null;
+  /** Function to navigate to a page (from pdfHighlighterUtils.goToPage) */
+  goToPage?: (pageNumber: number) => void;
   /** Whether panel is open */
   isOpen?: boolean;
   /** Callback when open state changes */
@@ -187,6 +189,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   viewer = null,
   linkService = null,
   eventBus = null,
+  goToPage: goToPageProp,
   isOpen: controlledIsOpen,
   onOpenChange,
   defaultTab = 'thumbnails',
@@ -232,7 +235,39 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     [onOpenChange]
   );
 
-  // Initialize hooks
+  // Initialize hooks - order matters: usePageNavigation before useDocumentOutline
+  const { thumbnails, loadThumbnail, totalPages } = useThumbnails({
+    pdfDocument,
+    thumbnailWidth,
+  });
+
+  const { currentPage, goToPage: goToPageFromHook } = usePageNavigation({
+    viewer,
+    eventBus,
+  });
+
+  // Use ref to always get the latest goToPage function
+  const goToPagePropRef = useRef(goToPageProp);
+
+  // Sync ref with useEffect to ensure it's updated after render
+  useEffect(() => {
+    goToPagePropRef.current = goToPageProp;
+  }, [goToPageProp]);
+
+  // Handle page selection - use ref to always get latest goToPage
+  const handlePageSelect = useCallback(
+    (pageNumber: number) => {
+      // Prefer the prop (from pdfHighlighterUtils) if available
+      if (goToPagePropRef.current) {
+        goToPagePropRef.current(pageNumber);
+      } else {
+        goToPageFromHook(pageNumber);
+      }
+      onPageSelect?.(pageNumber);
+    },
+    [goToPageFromHook, onPageSelect]
+  );
+
   const {
     outline,
     isLoading: isOutlineLoading,
@@ -240,27 +275,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     navigateToItem,
   } = useDocumentOutline({
     pdfDocument,
-    linkService,
+    goToPage: handlePageSelect,
   });
-
-  const { thumbnails, loadThumbnail, totalPages } = useThumbnails({
-    pdfDocument,
-    thumbnailWidth,
-  });
-
-  const { currentPage, goToPage } = usePageNavigation({
-    viewer,
-    eventBus,
-  });
-
-  // Handle page selection
-  const handlePageSelect = useCallback(
-    (pageNumber: number) => {
-      goToPage(pageNumber);
-      onPageSelect?.(pageNumber);
-    },
-    [goToPage, onPageSelect]
-  );
 
   // Handle outline item navigation
   const handleOutlineNavigate = useCallback(

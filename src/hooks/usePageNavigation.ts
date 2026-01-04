@@ -50,7 +50,9 @@ export function usePageNavigation(
 
   // Subscribe to page changes when eventBus is available
   useEffect(() => {
-    if (!eventBus || !isEventBus(eventBus)) return;
+    if (!eventBus || !isEventBus(eventBus)) {
+      return;
+    }
 
     const handlePageChange = (evt: { pageNumber: number }) => {
       setCurrentPage(evt.pageNumber);
@@ -63,12 +65,12 @@ export function usePageNavigation(
     };
   }, [eventBus]);
 
-  // Sync with viewer's current page when viewer first becomes available
-  const syncedRef = useRef(false);
+  // Reset currentPage to 1 when viewer changes (new PDF loaded)
+  const prevViewerRef = useRef(viewer);
   useEffect(() => {
-    if (viewer && isViewer(viewer) && viewer.currentPageNumber && !syncedRef.current) {
-      setCurrentPage(viewer.currentPageNumber);
-      syncedRef.current = true;
+    if (viewer !== prevViewerRef.current) {
+      setCurrentPage(1);
+      prevViewerRef.current = viewer;
     }
   }, [viewer]);
 
@@ -80,12 +82,15 @@ export function usePageNavigation(
       if (v && isViewer(v)) {
         const totalPages = v.pagesCount || 0;
         if (pageNumber >= 1 && pageNumber <= totalPages) {
-          try {
-            v.scrollPageIntoView({ pageNumber });
-            return;
-          } catch (e) {
-            // Fallback to DOM-based navigation if viewer scroll fails
-            // (e.g., "offsetParent is not set" error)
+          // Check if viewer container has valid offsetParent (required by PDF.js)
+          const container = (v as { container?: HTMLElement }).container;
+          if (container && container.offsetParent) {
+            try {
+              v.scrollPageIntoView({ pageNumber });
+              return;
+            } catch {
+              // Fall through to DOM-based navigation
+            }
           }
         }
       }

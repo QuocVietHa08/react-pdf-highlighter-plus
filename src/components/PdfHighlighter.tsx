@@ -788,7 +788,76 @@ export const PdfHighlighter = ({
     getLinkService: () => linkServiceRef.current,
     getEventBus: () => eventBusRef.current,
     goToPage: (pageNumber: number) => {
-      viewerRef.current?.scrollPageIntoView({ pageNumber });
+      console.log('[PdfHighlighter] goToPage called with page:', pageNumber);
+      const viewer = viewerRef.current;
+      if (!viewer) {
+        console.log('[PdfHighlighter] goToPage: viewer not available');
+        return;
+      }
+
+      // Check if viewer container has a valid offsetParent (required by PDF.js)
+      const container = viewer.container;
+      console.log('[PdfHighlighter] goToPage: container:', !!container, 'offsetParent:', !!container?.offsetParent);
+      if (container && container.offsetParent) {
+        try {
+          console.log('[PdfHighlighter] goToPage: using viewer.scrollPageIntoView');
+          viewer.scrollPageIntoView({ pageNumber });
+          return;
+        } catch (e) {
+          console.log('[PdfHighlighter] goToPage: scrollPageIntoView threw error:', e);
+          // Fall through to DOM-based scrolling
+        }
+      }
+
+      // Fallback: Use DOM-based scrolling when PDF.js scrollPageIntoView fails
+      const pageElement = container?.querySelector(`.page[data-page-number="${pageNumber}"]`) as HTMLElement | null;
+      console.log('[PdfHighlighter] goToPage: DOM fallback, pageElement found:', !!pageElement);
+      if (pageElement && container) {
+        // PDF.js pages use position:absolute with inline style.top set to their position
+        // Parse the inline style.top value to get the scroll target
+        const styleTop = pageElement.style.top;
+        const scrollTarget = styleTop ? parseInt(styleTop, 10) : 0;
+        console.log('[PdfHighlighter] goToPage: style.top =', styleTop, 'scrollTarget =', scrollTarget);
+
+        if (scrollTarget > 0) {
+          container.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth'
+          });
+        } else {
+          // Fallback: use getBoundingClientRect if style.top is not set
+          const containerRect = container.getBoundingClientRect();
+          const pageRect = pageElement.getBoundingClientRect();
+          const scrollTop = container.scrollTop + (pageRect.top - containerRect.top);
+          console.log('[PdfHighlighter] goToPage: using getBoundingClientRect, scrollTop =', scrollTop);
+          container.scrollTo({
+            top: scrollTop,
+            behavior: 'smooth'
+          });
+        }
+      } else {
+        // Try document-wide search as last resort
+        const docPageElement = document.querySelector(`.page[data-page-number="${pageNumber}"]`) as HTMLElement | null;
+        console.log('[PdfHighlighter] goToPage: document-wide search, found:', !!docPageElement);
+        if (docPageElement) {
+          // Parse inline style.top
+          const styleTop = docPageElement.style.top;
+          const scrollTarget = styleTop ? parseInt(styleTop, 10) : 0;
+          const scrollContainer = docPageElement.closest('.pdfViewer')?.parentElement as HTMLElement | null;
+
+          if (scrollContainer && scrollTarget > 0) {
+            console.log('[PdfHighlighter] goToPage: document search, scrolling to style.top =', scrollTarget);
+            scrollContainer.scrollTo({
+              top: scrollTarget,
+              behavior: 'smooth'
+            });
+          } else {
+            // Last resort: use scrollIntoView
+            console.log('[PdfHighlighter] goToPage: using scrollIntoView fallback');
+            docPageElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      }
     },
   };
 

@@ -5,6 +5,7 @@ import type { OutlineItem, ProcessedOutlineItem } from '../types';
 interface UseDocumentOutlineOptions {
   pdfDocument: PDFDocumentProxy;
   linkService?: { goToDestination: (dest: unknown) => void } | unknown | null;
+  goToPage?: (pageNumber: number) => void;
 }
 
 interface UseDocumentOutlineResult {
@@ -44,7 +45,6 @@ async function processOutlineItems(
         }
       } catch {
         // Keep default page 1 if resolution fails
-        console.log(`Failed to resolve destination for outline item: ${item.title}`);
       }
     }
 
@@ -90,7 +90,7 @@ function flattenOutline(items: ProcessedOutlineItem[]): ProcessedOutlineItem[] {
 export function useDocumentOutline(
   options: UseDocumentOutlineOptions
 ): UseDocumentOutlineResult {
-  const { pdfDocument, linkService } = options;
+  const { pdfDocument, goToPage } = options;
   const [outline, setOutline] = useState<ProcessedOutlineItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -104,7 +104,6 @@ export function useDocumentOutline(
         setError(null);
 
         const rawOutline = await pdfDocument.getOutline();
-        console.log('Raw outline from PDF:', rawOutline);
 
         if (cancelled) return;
 
@@ -121,11 +120,9 @@ export function useDocumentOutline(
 
         if (cancelled) return;
 
-        console.log('Processed outline:', processedOutline);
         setOutline(processedOutline);
       } catch (err) {
         if (cancelled) return;
-        console.error('Failed to load outline:', err);
         setError(err instanceof Error ? err : new Error('Failed to load outline'));
       } finally {
         if (!cancelled) {
@@ -143,12 +140,12 @@ export function useDocumentOutline(
 
   const navigateToItem = useCallback(
     (item: ProcessedOutlineItem) => {
-      console.log('Navigating to outline item:', item);
-      if (linkService && item.dest && typeof linkService === 'object' && 'goToDestination' in linkService) {
-        (linkService as { goToDestination: (dest: unknown) => void }).goToDestination(item.dest);
+      // Use goToPage with resolved pageNumber - reliable and works immediately
+      if (goToPage && item.pageNumber) {
+        goToPage(item.pageNumber);
       }
     },
-    [linkService]
+    [goToPage]
   );
 
   const flatOutline = useMemo(() => {

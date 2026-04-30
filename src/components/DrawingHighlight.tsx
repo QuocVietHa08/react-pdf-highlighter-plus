@@ -1,5 +1,7 @@
-import React, { CSSProperties, MouseEvent, ReactNode, useState, useCallback, useEffect, useRef } from "react";
+import React, { CSSProperties, MouseEvent, ReactNode, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
+import { findOrCreateHighlightConfigLayer } from "../lib/highlight-config-layer";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import type { DrawingStroke, LTWHP, ViewportHighlight } from "../types";
 
@@ -159,7 +161,16 @@ export const DrawingHighlight = ({
 }: DrawingHighlightProps) => {
   const highlightClass = isScrolledTo ? "DrawingHighlight--scrolledTo" : "";
   const [showStyleControls, setShowStyleControls] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
   const styleControlsRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+    }
+  }, []);
 
   // Close style controls when clicking outside
   useEffect(() => {
@@ -234,7 +245,88 @@ export const DrawingHighlight = ({
     <div
       className={`DrawingHighlight ${highlightClass}`}
       onContextMenu={onContextMenu}
+      ref={containerRef}
     >
+      {configLayer &&
+        createPortal(
+          <div
+            className={`DrawingHighlight__toolbar DrawingHighlight__toolbar--floating ${isHovered || isScrolledTo || showStyleControls ? "DrawingHighlight__toolbar--visible" : ""}`}
+            style={{
+              left: highlight.position.boundingRect.left + 4,
+              top: highlight.position.boundingRect.top + 4,
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            <div className="DrawingHighlight__drag-handle" title="Drag to move">
+              {dragIcon || <DefaultDragIcon />}
+            </div>
+            {strokes && strokes.length > 0 && onStyleChange && (
+              <button
+                type="button"
+                className="DrawingHighlight__style-button"
+                title="Edit style"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowStyleControls(!showStyleControls);
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className="DrawingHighlight__delete-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                title="Delete"
+                type="button"
+              >
+                {deleteIcon || <DefaultDeleteIcon />}
+              </button>
+            )}
+            {showStyleControls && strokes && strokes.length > 0 && onStyleChange && (
+              <div className="DrawingHighlight__style-controls" ref={styleControlsRef}>
+                <div className="DrawingHighlight__color-picker">
+                  {DRAWING_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`DrawingHighlight__color-button ${currentColor === color ? 'active' : ''}`}
+                      style={{ backgroundColor: color }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleColorChange(color);
+                      }}
+                      title={`Color: ${color}`}
+                    />
+                  ))}
+                </div>
+                <div className="DrawingHighlight__width-picker">
+                  {STROKE_WIDTHS.map((w) => (
+                    <button
+                      key={w.value}
+                      type="button"
+                      className={`DrawingHighlight__width-button ${currentWidth === w.value ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleWidthChange(w.value);
+                      }}
+                      title={w.label}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>,
+          configLayer,
+        )}
       <Rnd
         className="DrawingHighlight__rnd"
         onDragStop={(_, data) => {
@@ -273,84 +365,17 @@ export const DrawingHighlight = ({
         bounds={bounds}
         // No aspect ratio lock for drawings - allow free resizing
         lockAspectRatio={false}
-        dragHandleClassName="DrawingHighlight__drag-handle"
         onClick={(event: Event) => {
           event.stopPropagation();
           event.preventDefault();
         }}
         style={style}
       >
-        <div className="DrawingHighlight__container">
-          <div className="DrawingHighlight__toolbar">
-            <div className="DrawingHighlight__drag-handle" title="Drag to move">
-              {dragIcon || <DefaultDragIcon />}
-            </div>
-            {/* Style edit button - only show if strokes are available */}
-            {strokes && strokes.length > 0 && onStyleChange && (
-              <button
-                type="button"
-                className="DrawingHighlight__style-button"
-                title="Edit style"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowStyleControls(!showStyleControls);
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                </svg>
-              </button>
-            )}
-            {onDelete && (
-              <button
-                className="DrawingHighlight__delete-button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                title="Delete"
-                type="button"
-              >
-                {deleteIcon || <DefaultDeleteIcon />}
-              </button>
-            )}
-          </div>
-          {/* Style controls dropdown */}
-          {showStyleControls && strokes && strokes.length > 0 && onStyleChange && (
-            <div className="DrawingHighlight__style-controls" ref={styleControlsRef}>
-              <div className="DrawingHighlight__color-picker">
-                {DRAWING_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={`DrawingHighlight__color-button ${currentColor === color ? 'active' : ''}`}
-                    style={{ backgroundColor: color }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleColorChange(color);
-                    }}
-                    title={`Color: ${color}`}
-                  />
-                ))}
-              </div>
-              <div className="DrawingHighlight__width-picker">
-                {STROKE_WIDTHS.map((w) => (
-                  <button
-                    key={w.value}
-                    type="button"
-                    className={`DrawingHighlight__width-button ${currentWidth === w.value ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleWidthChange(w.value);
-                    }}
-                    title={w.label}
-                  >
-                    {w.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+        <div
+          className="DrawingHighlight__container"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
           <div className="DrawingHighlight__content">
             {imageUrl ? (
               <img

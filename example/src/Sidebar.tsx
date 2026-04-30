@@ -20,7 +20,14 @@ interface SidebarProps {
 }
 
 const updateHash = (highlight: Highlight) => {
-  document.location.hash = `highlight-${highlight.id}`;
+  const nextHash = `#highlight-${highlight.id}`;
+
+  if (document.location.hash === nextHash) {
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    return;
+  }
+
+  document.location.hash = nextHash;
 };
 
 declare const APP_VERSION: string;

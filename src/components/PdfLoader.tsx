@@ -17,10 +17,10 @@ const DEFAULT_ON_ERROR = (error: Error) => {
   throw new Error(`Error loading PDF document: ${error.message}!`);
 };
 
-// Default worker source - uses version 4.4.168
-// Users should provide their own workerSrc matching their pdfjs-dist version for best compatibility
-const DEFAULT_WORKER_SRC =
-  "https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs";
+const DEFAULT_WORKER_SRC = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 /**
  * The props type for {@link PdfLoader}.
@@ -68,8 +68,8 @@ export interface PdfLoaderProps {
   onError?(error: Error): void;
 
   /**
-   * NOTE: This will be applied to all PdfLoader instances.
-   * If you want to only apply a source to this instance, use the document parameters.
+   * Optional PDF.js worker source override. By default, PdfLoader resolves the
+   * worker from the installed pdfjs-dist package so bundlers can emit it locally.
    */
   workerSrc?: string;
 }

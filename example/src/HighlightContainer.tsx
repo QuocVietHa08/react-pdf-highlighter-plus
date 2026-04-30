@@ -25,12 +25,14 @@ interface HighlightContainerProps {
     event: MouseEvent<HTMLDivElement>,
     highlight: ViewportHighlight<CommentedHighlight>,
   ) => void;
+  noteCompactMode?: boolean;
 }
 
 const HighlightContainer = ({
   editHighlight,
   deleteHighlight,
   onContextMenu,
+  noteCompactMode = false,
 }: HighlightContainerProps) => {
   const {
     highlight,
@@ -51,6 +53,7 @@ const HighlightContainer = ({
         highlight={highlight}
         highlightColor={highlight.highlightColor}
         highlightStyle={highlight.highlightStyle}
+        copyText={highlight.content?.text}
         onStyleChange={(style) => {
           editHighlight(highlight.id, style);
         }}
@@ -70,6 +73,7 @@ const HighlightContainer = ({
         backgroundColor={highlight.backgroundColor}
         fontSize={highlight.fontSize}
         fontFamily={highlight.fontFamily}
+        compact={noteCompactMode}
         onChange={(boundingRect) => {
           editHighlight(highlight.id, {
             position: {
@@ -198,6 +202,7 @@ const HighlightContainer = ({
         isScrolledTo={isScrolledTo}
         highlight={highlight}
         highlightColor={highlight.highlightColor}
+        copyText={highlight.content?.text}
         onStyleChange={(style) => {
           editHighlight(highlight.id, style);
         }}

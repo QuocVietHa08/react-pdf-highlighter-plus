@@ -31,7 +31,8 @@
   transition: opacity 0.2s ease;
 }
 
-.ImageHighlight__container:hover .ImageHighlight__toolbar {
+.ImageHighlight__container:hover .ImageHighlight__toolbar,
+.ImageHighlight--scrolledTo .ImageHighlight__toolbar {
   opacity: 1;
 }
 

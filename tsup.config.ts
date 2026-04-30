@@ -14,7 +14,6 @@ export default defineConfig({
     options.jsx = "transform";
   },
   onSuccess: async () => {
-    // Copy CSS files to dist/esm/style
     const srcStyleDir = "src/style";
     const destStyleDir = "dist/esm/style";
 
@@ -26,6 +25,12 @@ export default defineConfig({
         copyFileSync(join(srcStyleDir, file), join(destStyleDir, file));
       }
     }
-    console.log("✓ CSS files copied to dist/esm/style");
+
+    copyFileSync(
+      "node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+      "dist/esm/pdf.worker.min.mjs",
+    );
+
+    console.log("✓ CSS files and PDF.js worker copied to dist/esm");
   },
 });

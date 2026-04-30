@@ -82,7 +82,7 @@ const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
 ### 4. Add Signature Pad
 
 ```tsx
-import { SignaturePad } from "react-pdf-highlighter-extended";
+import { SignaturePad } from "react-pdf-highlighter-plus";
 
 const [isSignaturePadOpen, setIsSignaturePadOpen] = useState(false);
 
@@ -107,7 +107,7 @@ const handleSignatureComplete = (dataUrl: string) => {
 ### 5. Render ImageHighlight in Your Container
 
 ```tsx
-import { ImageHighlight, useHighlightContainerContext } from "react-pdf-highlighter-extended";
+import { ImageHighlight, useHighlightContainerContext } from "react-pdf-highlighter-plus";
 
 const HighlightContainer = ({ editHighlight }) => {
   const { highlight, viewportToScaled, isScrolledTo, highlightBindings } = useHighlightContainerContext();
@@ -220,7 +220,7 @@ import {
   usePdfHighlighterContext,
   ScaledPosition,
   Highlight,
-} from "react-pdf-highlighter-extended";
+} from "react-pdf-highlighter-plus";
 
 const App = () => {
   const [highlights, setHighlights] = useState<Highlight[]>([]);

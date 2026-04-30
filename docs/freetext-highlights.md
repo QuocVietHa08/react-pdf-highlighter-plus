@@ -12,6 +12,22 @@ Freetext highlights are a new highlight type (`"freetext"`) that enables users t
 
 Unlike text highlights (which annotate selected text) or area highlights (which capture a region), freetext highlights are standalone annotations that can be placed anywhere.
 
+## Layering and Compact Mode
+
+Freetext notes render in `.PdfHighlighter__note-layer`, a page-level overlay above normal PDF content. This keeps note text readable and prevents it from blending with the PDF.js text layer.
+
+Set `compact` to render notes as compact markers until opened:
+
+```tsx
+<FreetextHighlight
+  highlight={highlight}
+  compact={noteCompactMode}
+  compactSize={32}
+/>
+```
+
+The example app exposes this through the compact notes toggle in the header and floating actions.
+
 ## Quick Start
 
 ### 1. Enable Freetext Mode in PdfHighlighter
@@ -44,7 +60,7 @@ const handleFreetextClick = (position: ScaledPosition) => {
 ### 3. Render FreetextHighlight in Your Container
 
 ```tsx
-import { FreetextHighlight, useHighlightContainerContext } from "react-pdf-highlighter-extended";
+import { FreetextHighlight, useHighlightContainerContext } from "react-pdf-highlighter-plus";
 
 const HighlightContainer = ({ editHighlight }) => {
   const { highlight, viewportToScaled, isScrolledTo } = useHighlightContainerContext();
@@ -233,7 +249,7 @@ import {
   usePdfHighlighterContext,
   ScaledPosition,
   Highlight,
-} from "react-pdf-highlighter-extended";
+} from "react-pdf-highlighter-plus";
 
 // Style configuration
 interface FreetextStyle {

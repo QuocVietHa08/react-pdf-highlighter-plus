@@ -1,4 +1,5 @@
 import React, { MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import CommentForm from "./CommentForm";
 import ContextMenu, { ContextMenuProps } from "./ContextMenu";
 import ExpandableTip from "./ExpandableTip";
@@ -20,15 +21,70 @@ import {
   SignaturePad,
   Tip,
   ViewportHighlight,
-  exportPdf,
+  extractPageTextItems,
+  extractSentences,
+  extractTextUnits,
 } from "./react-pdf-highlighter-extended";
 import "./style/App.css";
-import { testHighlights as _testHighlights } from "./test-highlights";
 import { CommentedHighlight } from "./types";
 
-const TEST_HIGHLIGHTS = _testHighlights;
 const PRIMARY_PDF_URL = "https://arxiv.org/pdf/2203.11115";
 const SECONDARY_PDF_URL = "https://arxiv.org/pdf/1604.02480";
+type TestHighlights = Record<string, CommentedHighlight[]>;
+
+type SearchStatus = {
+  current: number;
+  total: number;
+  isPending: boolean;
+};
+
+const parsePageSelection = (input: string): "all" | number[] => {
+  const trimmedInput = input.trim().toLowerCase();
+  if (!trimmedInput || trimmedInput === "all") return "all";
+
+  const pages = new Set<number>();
+
+  trimmedInput.split(",").forEach((part) => {
+    const trimmedPart = part.trim();
+    if (!trimmedPart) return;
+
+    const rangeMatch = trimmedPart.match(/^(\d+)\s*-\s*(\d+)$/);
+    if (rangeMatch) {
+      const start = Number(rangeMatch[1]);
+      const end = Number(rangeMatch[2]);
+      const firstPage = Math.min(start, end);
+      const lastPage = Math.max(start, end);
+
+      for (let page = firstPage; page <= lastPage; page += 1) {
+        pages.add(page);
+      }
+
+      return;
+    }
+
+    const page = Number(trimmedPart);
+    if (Number.isInteger(page) && page > 0) {
+      pages.add(page);
+    }
+  });
+
+  return pages.size > 0 ? Array.from(pages).sort((a, b) => a - b) : "all";
+};
+
+const downloadJson = (data: unknown, filename: string) => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const downloadUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(downloadUrl);
+};
 
 const getNextId = () => String(Math.random()).slice(2);
 
@@ -42,9 +98,8 @@ const resetHash = () => {
 
 const App = () => {
   const [url, setUrl] = useState<string | Uint8Array>(PRIMARY_PDF_URL);
-  const [highlights, setHighlights] = useState<Array<CommentedHighlight>>(
-    TEST_HIGHLIGHTS[PRIMARY_PDF_URL] ?? [],
-  );
+  const [highlights, setHighlights] = useState<Array<CommentedHighlight>>([]);
+  const testHighlightsRef = useRef<TestHighlights>({});
   const currentPdfIndexRef = useRef(0);
   const [contextMenu, setContextMenu] = useState<ContextMenuProps | null>(null);
   const [pdfScaleValue, setPdfScaleValue] = useState<number | undefined>(
@@ -52,6 +107,7 @@ const App = () => {
   );
   const [highlightPen, setHighlightPen] = useState<boolean>(false);
   const [freetextMode, setFreetextMode] = useState<boolean>(false);
+  const [noteCompactMode, setNoteCompactMode] = useState<boolean>(false);
   const [imageMode, setImageMode] = useState<boolean>(false);
   const [areaMode, setAreaMode] = useState<boolean>(false);
   const [isSignaturePadOpen, setIsSignaturePadOpen] = useState<boolean>(false);
@@ -71,9 +127,19 @@ const App = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState<boolean>(true);
   // Dark mode state
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>({
+    current: 0,
+    total: 0,
+    isPending: false,
+  });
+  const [isExtractingSentences, setIsExtractingSentences] = useState(false);
+  const [extractedSentenceCount, setExtractedSentenceCount] = useState(0);
+  const [sentenceExtractionPages, setSentenceExtractionPages] = useState("all");
 
   // Refs for PdfHighlighter utilities
   const highlighterUtilsRef = useRef<PdfHighlighterUtils | null>(null);
+  const pdfDocumentRef = useRef<PDFDocumentProxy | null>(null);
   const [, forceUpdate] = useState({});
   const hasInitializedUtilsRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -81,13 +147,76 @@ const App = () => {
   // Reset utils initialization flag when URL changes so forceUpdate triggers again
   useEffect(() => {
     hasInitializedUtilsRef.current = false;
+    setSearchQuery("");
+    setSearchStatus({ current: 0, total: 0, isPending: false });
+    setExtractedSentenceCount(0);
+    setSentenceExtractionPages("all");
   }, [url]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    import("./test-highlights").then(({ testHighlights }) => {
+      if (cancelled) return;
+      testHighlightsRef.current = testHighlights;
+      setHighlights(testHighlights[PRIMARY_PDF_URL] ?? []);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const eventBus = highlighterUtilsRef.current?.getEventBus();
+    if (
+      !eventBus ||
+      typeof (eventBus as { on?: unknown }).on !== "function" ||
+      typeof (eventBus as { off?: unknown }).off !== "function"
+    ) {
+      return;
+    }
+
+    const typedEventBus = eventBus as {
+      on: (eventName: string, callback: (event: any) => void) => void;
+      off: (eventName: string, callback: (event: any) => void) => void;
+    };
+
+    const handleFindState = (event: {
+      state?: number;
+      matchesCount?: { current?: number; total?: number };
+    }) => {
+      setSearchStatus({
+        current: event.matchesCount?.current ?? 0,
+        total: event.matchesCount?.total ?? 0,
+        isPending: event.state === 3,
+      });
+    };
+
+    const handleMatchesCount = (event: {
+      matchesCount?: { current?: number; total?: number };
+    }) => {
+      setSearchStatus((previous) => ({
+        ...previous,
+        current: event.matchesCount?.current ?? 0,
+        total: event.matchesCount?.total ?? 0,
+      }));
+    };
+
+    typedEventBus.on("updatefindcontrolstate", handleFindState);
+    typedEventBus.on("updatefindmatchescount", handleMatchesCount);
+
+    return () => {
+      typedEventBus.off("updatefindcontrolstate", handleFindState);
+      typedEventBus.off("updatefindmatchescount", handleMatchesCount);
+    };
+  });
 
   const toggleDocument = () => {
     const urls = [PRIMARY_PDF_URL, SECONDARY_PDF_URL];
     currentPdfIndexRef.current = (currentPdfIndexRef.current + 1) % urls.length;
     setUrl(urls[currentPdfIndexRef.current]);
-    setHighlights(TEST_HIGHLIGHTS[urls[currentPdfIndexRef.current]] ?? []);
+    setHighlights(testHighlightsRef.current[urls[currentPdfIndexRef.current]] ?? []);
   };
 
   const handleLoadLocalPdf = (file: File) => {
@@ -301,6 +430,7 @@ const App = () => {
   const handleExportPdf = async () => {
     console.log("Exporting PDF with annotations...");
     try {
+      const { exportPdf } = await import("./react-pdf-highlighter-extended");
       const pdfBytes = await exportPdf(url, highlights, {
         onProgress: (current, total) => {
           console.log(`Exporting page ${current}/${total}`);
@@ -333,6 +463,70 @@ const App = () => {
   const handleZoomOut = () => {
     const currentScale = pdfScaleValue || 1;
     setPdfScaleValue(Math.max(currentScale - 0.25, 0.5));
+  };
+
+  const handleSearchSubmit = () => {
+    const query = searchQuery.trim();
+
+    if (!query) {
+      highlighterUtilsRef.current?.clearSearch();
+      setSearchStatus({ current: 0, total: 0, isPending: false });
+      return;
+    }
+
+    setSearchStatus((previous) => ({ ...previous, isPending: true }));
+    highlighterUtilsRef.current?.search(query, { highlightAll: true });
+  };
+
+  const handleSearchClear = () => {
+    setSearchQuery("");
+    setSearchStatus({ current: 0, total: 0, isPending: false });
+    highlighterUtilsRef.current?.clearSearch();
+  };
+
+  const handleExtractSentences = async () => {
+    const pdfDocument = pdfDocumentRef.current;
+    if (!pdfDocument || isExtractingSentences) return;
+
+    setIsExtractingSentences(true);
+
+    try {
+      const pages = parsePageSelection(sentenceExtractionPages);
+      const extractionOptions = {
+        pages,
+      };
+      const [extractedPages, textUnits, sentences] = await Promise.all([
+        extractPageTextItems(pdfDocument, extractionOptions),
+        extractTextUnits(pdfDocument, extractionOptions),
+        extractSentences(pdfDocument, extractionOptions),
+      ]);
+      const exportPayload = {
+        pageSelection: pages,
+        pages: extractedPages.map((page) => ({
+          pageNumber: page.pageNumber,
+          width: page.width,
+          height: page.height,
+          columns: page.columns ?? [],
+          textUnits: textUnits.filter(
+            (unit) => unit.pageNumber === page.pageNumber,
+          ),
+          sentences: sentences.filter(
+            (sentence) => sentence.pageNumber === page.pageNumber,
+          ),
+        })),
+      };
+      const pageLabel = Array.isArray(pages) ? pages.join("-") : "all";
+
+      console.log("Extracted PDF text units", textUnits);
+      console.log("Extracted PDF sentences", sentences);
+      setExtractedSentenceCount(sentences.length);
+      downloadJson(exportPayload, `pdf-sentences-${pageLabel}.json`);
+    } catch (error) {
+      console.error("Failed to extract sentences:", error);
+      alert("Failed to extract sentences. See console for details.");
+    } finally {
+      setIsExtractingSentences(false);
+    }
   };
 
   const resetHighlights = () => {
@@ -404,6 +598,22 @@ const App = () => {
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         onLoadLocalPdf={handleLoadLocalPdf}
+        searchQuery={searchQuery}
+        searchCurrent={searchStatus.current}
+        searchTotal={searchStatus.total}
+        isSearchPending={searchStatus.isPending}
+        noteCompactMode={noteCompactMode}
+        onSearchQueryChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onSearchNext={() => highlighterUtilsRef.current?.findNext()}
+        onSearchPrevious={() => highlighterUtilsRef.current?.findPrevious()}
+        onSearchClear={handleSearchClear}
+        onToggleNoteCompactMode={() => setNoteCompactMode(!noteCompactMode)}
+        onExtractSentences={handleExtractSentences}
+        isExtractingSentences={isExtractingSentences}
+        extractedSentenceCount={extractedSentenceCount}
+        sentenceExtractionPages={sentenceExtractionPages}
+        onSentenceExtractionPagesChange={setSentenceExtractionPages}
       />
 
       {/* Main content */}
@@ -422,8 +632,11 @@ const App = () => {
         {/* PDF Viewer with Left Panel */}
         <div className="relative flex-1 overflow-hidden flex h-full">
           <PdfLoader document={url}>
-            {(pdfDocument) => (
-              <div className="flex h-full w-full">
+            {(pdfDocument) => {
+              pdfDocumentRef.current = pdfDocument;
+
+              return (
+                <div className="flex h-full w-full">
                 {/* Left Panel - Outline & Thumbnails */}
                 <LeftPanel
                   pdfDocument={pdfDocument}
@@ -434,7 +647,7 @@ const App = () => {
                   isOpen={leftPanelOpen}
                   onOpenChange={setLeftPanelOpen}
                   width={280}
-                  defaultTab="thumbnails"
+                  defaultTab="outline"
                 />
 
                 {/* PDF Highlighter */}
@@ -489,11 +702,13 @@ const App = () => {
                       editHighlight={editHighlight}
                       deleteHighlight={(id) => deleteHighlight({ id } as Highlight)}
                       onContextMenu={handleContextMenu}
+                      noteCompactMode={noteCompactMode}
                     />
                   </PdfHighlighter>
                 </div>
-              </div>
-            )}
+                </div>
+              );
+            }}
           </PdfLoader>
 
           {/* Floating Actions */}
@@ -502,6 +717,8 @@ const App = () => {
             onToggleHighlightPen={() => setHighlightPen(!highlightPen)}
             freetextMode={freetextMode}
             onToggleFreetextMode={() => setFreetextMode(!freetextMode)}
+            noteCompactMode={noteCompactMode}
+            onToggleNoteCompactMode={() => setNoteCompactMode(!noteCompactMode)}
             areaMode={areaMode}
             onToggleAreaMode={() => setAreaMode(!areaMode)}
             onAddImage={handleAddImage}

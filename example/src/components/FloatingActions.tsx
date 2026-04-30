@@ -5,6 +5,7 @@ import {
   Highlighter,
   StickyNote,
   Image,
+  Minimize2,
   PenTool,
   Pencil,
   Square,
@@ -29,6 +30,8 @@ interface FloatingActionsProps {
   onToggleHighlightPen: () => void;
   freetextMode: boolean;
   onToggleFreetextMode: () => void;
+  noteCompactMode: boolean;
+  onToggleNoteCompactMode: () => void;
   areaMode: boolean;
   onToggleAreaMode: () => void;
   onAddImage: () => void;
@@ -63,6 +66,8 @@ export function FloatingActions({
   onToggleHighlightPen,
   freetextMode,
   onToggleFreetextMode,
+  noteCompactMode,
+  onToggleNoteCompactMode,
   areaMode,
   onToggleAreaMode,
   onAddImage,
@@ -82,7 +87,7 @@ export function FloatingActions({
 }: FloatingActionsProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const isAnyModeActive = highlightPen || freetextMode || areaMode || drawingMode || !!shapeMode;
+  const isAnyModeActive = highlightPen || freetextMode || noteCompactMode || areaMode || drawingMode || !!shapeMode;
 
   return (
     <TooltipProvider>
@@ -249,6 +254,23 @@ export function FloatingActions({
               </TooltipTrigger>
               <TooltipContent side="left">
                 {freetextMode ? "Exit note mode" : "Add note"}
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Compact Notes */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={noteCompactMode ? "default" : "outline"}
+                  size="icon"
+                  className="h-12 w-12 rounded-full shadow-md"
+                  onClick={onToggleNoteCompactMode}
+                >
+                  <Minimize2 className="h-5 w-5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left">
+                {noteCompactMode ? "Show full notes" : "Compact notes"}
               </TooltipContent>
             </Tooltip>
 

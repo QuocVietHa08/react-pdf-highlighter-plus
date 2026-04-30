@@ -150,7 +150,14 @@ Dark mode uses CSS filters to invert PDF page colors:
 .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
   filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
 }
+
+.PdfHighlighter--dark .PdfHighlighter__note-layer,
+.PdfHighlighter--dark .PdfHighlighter__config-layer {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+}
 ```
+
+The package uses separate overlay layers for geometry, notes, and configuration UI. In dark mode, each overlay layer is adjusted so annotation colors and controls remain readable.
 
 ---
 

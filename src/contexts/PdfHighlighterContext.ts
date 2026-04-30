@@ -3,6 +3,22 @@ import { GhostHighlight, Highlight, PdfSelection, Tip } from "../types";
 import { PDFViewer } from "pdfjs-dist/types/web/pdf_viewer";
 
 /**
+ * Options for searching text in the PDF document.
+ *
+ * @category Type
+ */
+export type PdfSearchOptions = {
+  /** If true, search is case-sensitive. */
+  caseSensitive?: boolean;
+  /** If true, only whole-word matches are returned. */
+  entireWord?: boolean;
+  /** If true, all matches are highlighted, not just the selected match. */
+  highlightAll?: boolean;
+  /** If true, diacritics must match exactly. */
+  matchDiacritics?: boolean;
+};
+
+/**
  * A set of utilities for to control the behaviour of {@link PdfHighlighter}.
  *
  * @category Context
@@ -110,6 +126,29 @@ export type PdfHighlighterUtils = {
    * @param pageNumber - 1-indexed page number to navigate to.
    */
   goToPage(pageNumber: number): void;
+
+  /**
+   * Search for text in the PDF document.
+   *
+   * @param query - Search text.
+   * @param options - Search options.
+   */
+  search(query: string, options?: PdfSearchOptions): void;
+
+  /**
+   * Move to the next search result.
+   */
+  findNext(): void;
+
+  /**
+   * Move to the previous search result.
+   */
+  findPrevious(): void;
+
+  /**
+   * Clear active search highlights.
+   */
+  clearSearch(): void;
 };
 
 export const PdfHighlighterContext = createContext<

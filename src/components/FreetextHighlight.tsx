@@ -138,6 +138,21 @@ export interface FreetextHighlightProps {
    * Custom delete icon. Replaces the default trash icon.
    */
   deleteIcon?: ReactNode;
+
+  /**
+   * Render the note as a compact marker until opened.
+   */
+  compact?: boolean;
+
+  /**
+   * Size of the compact marker in pixels.
+   */
+  compactSize?: number;
+
+  /**
+   * Custom compact marker icon.
+   */
+  compactIcon?: ReactNode;
 }
 
 /**
@@ -175,6 +190,18 @@ const DefaultDeleteIcon = () => (
   </svg>
 );
 
+const DefaultCompactIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M6 3h9l5 5v13H6V3zm8 1.5V9h4.5L14 4.5zM8 12h8v1.5H8V12zm0 3h8v1.5H8V15zm0 3h5v1.5H8V18z" />
+  </svg>
+);
+
+const DefaultCollapseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M7 10v2h10v-2H7zm-2-7h14c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2zm0 2v14h14V5H5z" />
+  </svg>
+);
+
 // Default color presets
 const DEFAULT_BACKGROUND_PRESETS = ["transparent", "#ffffc8", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"];
 const DEFAULT_TEXT_PRESETS = ["#333333", "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2"];
@@ -201,8 +228,12 @@ export const FreetextHighlight = ({
   textColorPresets = DEFAULT_TEXT_PRESETS,
   onDelete,
   deleteIcon,
+  compact = false,
+  compactSize = 32,
+  compactIcon,
 }: FreetextHighlightProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(!compact);
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [text, setText] = useState(highlight.content?.text || "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -212,6 +243,14 @@ export const FreetextHighlight = ({
   useEffect(() => {
     setText(highlight.content?.text || "");
   }, [highlight.content?.text]);
+
+  useEffect(() => {
+    setIsExpanded(!compact);
+    setIsStylePanelOpen(false);
+    if (!compact) {
+      setIsEditing(false);
+    }
+  }, [compact]);
 
   // Focus textarea when entering edit mode
   useEffect(() => {
@@ -244,13 +283,17 @@ export const FreetextHighlight = ({
 
   const highlightClass = isScrolledTo ? "FreetextHighlight--scrolledTo" : "";
   const editingClass = isEditing ? "FreetextHighlight--editing" : "";
+  const compactClass = compact ? "FreetextHighlight--compact" : "";
+  const isCompactCollapsed = compact && !isExpanded && !isEditing && !isStylePanelOpen;
+  const collapsedClass = isCompactCollapsed ? "FreetextHighlight--collapsed" : "";
 
   // Generate key based on position for Rnd remount on position changes
-  const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}`;
+  const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}${isCompactCollapsed ? "collapsed" : "expanded"}`;
 
   const handleTextClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!isEditing) {
+      setIsExpanded(true);
       setIsEditing(true);
       onEditStart?.();
     }
@@ -288,7 +331,7 @@ export const FreetextHighlight = ({
 
   return (
     <div
-      className={`FreetextHighlight ${highlightClass} ${editingClass}`}
+      className={`FreetextHighlight ${highlightClass} ${editingClass} ${compactClass} ${collapsedClass}`}
       onContextMenu={onContextMenu}
     >
       <Rnd
@@ -309,23 +352,27 @@ export const FreetextHighlight = ({
         default={{
           x: highlight.position.boundingRect.left,
           y: highlight.position.boundingRect.top,
-          width: highlight.position.boundingRect.width || 150,
-          height: highlight.position.boundingRect.height || 80,
+          width: isCompactCollapsed ? compactSize : highlight.position.boundingRect.width || 150,
+          height: isCompactCollapsed ? compactSize : highlight.position.boundingRect.height || 80,
         }}
-        minWidth={100}
-        minHeight={50}
+        minWidth={isCompactCollapsed ? compactSize : 100}
+        minHeight={isCompactCollapsed ? compactSize : 50}
         key={key}
         bounds={bounds}
-        enableResizing={{
-          top: false,
-          right: true,
-          bottom: true,
-          left: false,
-          topRight: false,
-          bottomRight: true,
-          bottomLeft: false,
-          topLeft: false,
-        }}
+        enableResizing={
+          isCompactCollapsed
+            ? false
+            : {
+                top: false,
+                right: true,
+                bottom: true,
+                left: false,
+                topRight: false,
+                bottomRight: true,
+                bottomLeft: false,
+                topLeft: false,
+              }
+        }
         onResizeStop={(_e, _direction, ref, _delta, position) => {
           const boundingRect: LTWHP = {
             top: position.y,
@@ -343,9 +390,23 @@ export const FreetextHighlight = ({
             onEditStart?.();
           }
         }}
-        cancel=".FreetextHighlight__text, .FreetextHighlight__input, .FreetextHighlight__edit-button, .FreetextHighlight__style-button, .FreetextHighlight__style-panel, .FreetextHighlight__delete-button"
+        cancel=".FreetextHighlight__text, .FreetextHighlight__input, .FreetextHighlight__edit-button, .FreetextHighlight__style-button, .FreetextHighlight__style-panel, .FreetextHighlight__delete-button, .FreetextHighlight__collapse-button, .FreetextHighlight__compact-button"
       >
         <div className="FreetextHighlight__container" style={containerStyle}>
+          {isCompactCollapsed ? (
+            <button
+              className="FreetextHighlight__compact-button"
+              type="button"
+              title={text || "Open note"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsExpanded(true);
+              }}
+            >
+              {compactIcon || <DefaultCompactIcon />}
+            </button>
+          ) : (
+            <>
           <div className="FreetextHighlight__toolbar">
             <div className="FreetextHighlight__drag-handle" title="Drag to move">
               {dragIcon || <DefaultDragIcon />}
@@ -369,6 +430,20 @@ export const FreetextHighlight = ({
             >
               {styleIcon || <DefaultStyleIcon />}
             </button>
+            {compact && (
+              <button
+                className="FreetextHighlight__collapse-button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExpanded(false);
+                  setIsStylePanelOpen(false);
+                }}
+                title="Collapse note"
+                type="button"
+              >
+                <DefaultCollapseIcon />
+              </button>
+            )}
             {onDelete && (
               <button
                 className="FreetextHighlight__delete-button"
@@ -490,6 +565,8 @@ export const FreetextHighlight = ({
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
       </Rnd>
     </div>

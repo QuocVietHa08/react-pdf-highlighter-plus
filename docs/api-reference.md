@@ -1,17 +1,187 @@
 # API Reference
 
-Complete reference for all components, functions, and types in react-pdf-highlighter-extended.
+Complete reference for all components, functions, and types in react-pdf-highlighter-plus.
+
+---
+
+## Utilities
+
+### extractSentences
+
+Extracts sentence-level text from a PDF.js document and returns sentence metadata with optional highlight-compatible positions.
+
+```tsx
+import { extractSentences } from "react-pdf-highlighter-plus";
+
+const sentences = await extractSentences(pdfDocument);
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `pages` | `"all" \| number[]` | `"all"` | Pages to extract from |
+| `includePositions` | `boolean` | `true` | Include `ScaledPosition` values for rendering highlights |
+| `normalize` | `boolean` | `true` | Normalize whitespace, line-break hyphenation, and citation spacing |
+| `locale` | `string` | `"en"` | Locale used by `Intl.Segmenter` |
+| `idPrefix` | `string` | `""` | Prefix applied to generated sentence ids |
+| `readingOrder` | `"auto" \| "document" \| "position"` | `"auto"` | Controls whether extraction uses detected layout order or raw PDF order |
+| `columnDetection` | `"auto" \| "none"` | `"auto"` | Detect body columns and read each column top-to-bottom |
+
+```tsx
+const sentences = await extractSentences(pdfDocument, {
+  pages: [1, 2],
+  idPrefix: "ai-",
+});
+
+console.log(sentences[0]);
+// {
+//   id: "ai-p1-s0",
+//   text: "JavaScript enables rich interactions.",
+//   rawText: "JavaScript enables rich interactions.",
+//   pageNumber: 1,
+//   indexInPage: 0,
+//   globalIndex: 0,
+//   position: { boundingRect, rects },
+//   source: { startOffset, endOffset, textItemIndexes }
+// }
+```
+
+### extractPageTextItems
+
+Returns lower-level PDF.js text items with page-relative rectangles. Use this when you need custom text grouping instead of sentence extraction.
+
+```tsx
+import { extractPageTextItems } from "react-pdf-highlighter-plus";
+
+const pages = await extractPageTextItems(pdfDocument, { pages: [1] });
+```
+
+### extractTextUnits
+
+Extracts layout-aware text units before sentence splitting. This is useful for research papers where titles, author blocks, section headings, footnotes, reference links, and two-column body layouts need local layout handling before sentence extraction.
+
+```tsx
+import { extractTextUnits } from "react-pdf-highlighter-plus";
+
+const units = await extractTextUnits(pdfDocument, { pages: [1] });
+```
+
+Each unit has a `type`:
+
+```ts
+"paragraph" | "title" | "heading" | "author" | "affiliation" | "footnote" | "reference" | "unknown"
+```
+
+`extractSentences()` uses this layer and splits only `"paragraph"` units by default. To include other unit types:
+
+```tsx
+const sentences = await extractSentences(pdfDocument, {
+  includeTextUnitTypes: ["paragraph", "title", "heading"],
+});
+```
+
+Two-column academic pages are detected automatically. Extracted units and sentences include `columnIndex` when a page has detected body columns. Use `columnDetection: "none"` to disable this and keep single-column grouping.
+
+The extractor also repairs common PDF text artifacts: per-glyph output such as `T h i n k`, jammed word boundaries in common academic prose, spaced hyphen compounds, citation spacing, and common ligatures such as `ﬁ`.
+
+The example app JSON export groups results by page:
+
+```json
+{
+  "pageSelection": "all",
+  "pages": [
+    {
+      "pageNumber": 1,
+      "columns": [],
+      "textUnits": [],
+      "sentences": []
+    }
+  ]
+}
+```
+
+### sentenceToHighlight
+
+Converts a positioned sentence into a standard text highlight.
+
+```tsx
+import {
+  extractSentences,
+  sentenceToHighlight,
+} from "react-pdf-highlighter-plus";
+
+const sentences = await extractSentences(pdfDocument);
+const highlights = sentences
+  .filter((sentence) => sentence.position)
+  .map((sentence) => sentenceToHighlight(sentence));
+```
+
+For AI workflows, keep model calls in your app layer:
+
+```tsx
+const sentences = await extractSentences(pdfDocument);
+const aiInput = sentences.map(({ id, text }) => ({ id, text }));
+const aiResults = await analyzeSentences(aiInput);
+
+const highlights = sentences
+  .filter((sentence) => aiResults[sentence.id]?.important)
+  .map((sentence) => sentenceToHighlight(sentence));
+```
 
 ---
 
 ## Components
+
+### TextHighlight
+
+Renders selected PDF text as highlight rectangles.
+
+```tsx
+import { TextHighlight } from "react-pdf-highlighter-plus";
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `highlight` | `ViewportHighlight` | Required | Text highlight data |
+| `isScrolledTo` | `boolean` | `false` | Whether highlight was auto-scrolled to |
+| `highlightColor` | `string` | Yellow | Highlight color |
+| `highlightStyle` | `"highlight" \| "underline" \| "strikethrough"` | `"highlight"` | Text highlight style |
+| `copyText` | `string` | - | Text copied by the toolbar copy button |
+| `onStyleChange` | `(style: TextHighlightStyle) => void` | - | Called when style changes |
+| `onDelete` | `() => void` | - | Called when delete is clicked |
+
+Geometry renders in `.PdfHighlighter__highlight-layer`; toolbar, style panel, and copy button render in `.PdfHighlighter__config-layer`.
+
+---
+
+### AreaHighlight
+
+Renders a draggable, resizable rectangular area annotation.
+
+```tsx
+import { AreaHighlight } from "react-pdf-highlighter-plus";
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `highlight` | `ViewportHighlight` | Required | Area highlight data |
+| `onChange` | `(rect: LTWHP) => void` | - | Called when position/size changes |
+| `isScrolledTo` | `boolean` | `false` | Whether highlight was auto-scrolled to |
+| `bounds` | `string \| Element` | - | Bounds for dragging/resizing |
+| `highlightColor` | `string` | Yellow | Area color |
+| `copyText` | `string` | - | Text copied by the toolbar copy button |
+| `onStyleChange` | `(style: AreaHighlightStyle) => void` | - | Called when style changes |
+| `onDelete` | `() => void` | - | Called when delete is clicked |
+
+When `copyText` is not provided, the copy button extracts intersecting text from the PDF.js text layer.
+
+---
 
 ### FreetextHighlight
 
 A draggable, editable text annotation component.
 
 ```tsx
-import { FreetextHighlight } from "react-pdf-highlighter-extended";
+import { FreetextHighlight } from "react-pdf-highlighter-plus";
 ```
 
 #### Props
@@ -37,6 +207,9 @@ import { FreetextHighlight } from "react-pdf-highlighter-extended";
 | `styleIcon` | `ReactNode` | Palette | Custom style button icon |
 | `backgroundColorPresets` | `string[]` | See below | Background color presets |
 | `textColorPresets` | `string[]` | See below | Text color presets |
+| `compact` | `boolean` | `false` | Render the note as a compact marker until opened |
+| `compactSize` | `number` | `32` | Compact marker size in pixels |
+| `compactIcon` | `ReactNode` | Note icon | Custom compact marker icon |
 
 **Default Color Presets:**
 - Background: `["#ffffc8", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"]`
@@ -64,7 +237,7 @@ import { FreetextHighlight } from "react-pdf-highlighter-extended";
 A draggable, resizable image annotation component.
 
 ```tsx
-import { ImageHighlight } from "react-pdf-highlighter-extended";
+import { ImageHighlight } from "react-pdf-highlighter-plus";
 ```
 
 #### Props
@@ -80,6 +253,10 @@ import { ImageHighlight } from "react-pdf-highlighter-extended";
 | `onEditEnd` | `() => void` | - | Called when drag/resize ends |
 | `style` | `CSSProperties` | - | Custom container styling |
 | `dragIcon` | `ReactNode` | 6-dot grid | Custom drag handle icon |
+| `onStyleChange` | `(image: string, strokes: DrawingStroke[]) => void` | - | Called after editing drawing color/width |
+| `onDelete` | `() => void` | - | Called when delete is clicked |
+
+Drawing geometry renders in `.PdfHighlighter__highlight-layer`; toolbar/style controls render in `.PdfHighlighter__config-layer`.
 
 #### Example
 
@@ -101,7 +278,7 @@ import { ImageHighlight } from "react-pdf-highlighter-extended";
 A draggable, resizable freehand drawing component.
 
 ```tsx
-import { DrawingHighlight } from "react-pdf-highlighter-extended";
+import { DrawingHighlight } from "react-pdf-highlighter-plus";
 ```
 
 #### Props
@@ -133,12 +310,36 @@ import { DrawingHighlight } from "react-pdf-highlighter-extended";
 
 ---
 
+### ShapeHighlight
+
+A draggable, resizable rectangle, circle, or arrow annotation.
+
+```tsx
+import { ShapeHighlight } from "react-pdf-highlighter-plus";
+```
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `highlight` | `ViewportHighlight` | Required | The highlight data |
+| `shapeType` | `"rectangle" \| "circle" \| "arrow"` | `"rectangle"` | Shape type to render |
+| `strokeColor` | `string` | `"#000000"` | Stroke color |
+| `strokeWidth` | `number` | `2` | Stroke width |
+| `startPoint` | `{ x: number; y: number }` | - | Arrow start point as a ratio of bounds |
+| `endPoint` | `{ x: number; y: number }` | - | Arrow end point as a ratio of bounds |
+| `onChange` | `(rect: LTWHP) => void` | - | Called when position/size changes |
+| `onStyleChange` | `(style: ShapeStyle) => void` | - | Called when stroke style changes |
+| `onDelete` | `() => void` | - | Called when delete is clicked |
+
+Shape geometry renders in `.PdfHighlighter__highlight-layer`; toolbar/style controls render in `.PdfHighlighter__config-layer`.
+
+---
+
 ### SignaturePad
 
 A modal component for drawing signatures.
 
 ```tsx
-import { SignaturePad } from "react-pdf-highlighter-extended";
+import { SignaturePad } from "react-pdf-highlighter-plus";
 ```
 
 #### Props
@@ -176,7 +377,7 @@ import { SignaturePad } from "react-pdf-highlighter-extended";
 Export a PDF with annotations embedded.
 
 ```tsx
-import { exportPdf } from "react-pdf-highlighter-extended";
+import { exportPdf } from "react-pdf-highlighter-plus";
 ```
 
 #### Signature
@@ -337,18 +538,23 @@ const [darkMode, setDarkMode] = useState(false);
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `enableDrawingCreation` | `(event: MouseEvent) => boolean` | Returns true when drawing mode is active |
-| `onDrawingComplete` | `(position: ScaledPosition, dataUrl: string) => void` | Called when drawing is finished |
-| `drawingConfig` | `DrawingConfig` | Stroke color and width settings |
+| `enableDrawingMode` | `boolean` | Whether drawing mode is active |
+| `onDrawingComplete` | `(dataUrl: string, position: ScaledPosition, strokes: DrawingStroke[]) => void` | Called when drawing is finished |
+| `drawingStrokeColor` | `string` | Drawing stroke color |
+| `drawingStrokeWidth` | `number` | Drawing stroke width |
 
-#### DrawingConfig
+### Shape-related
 
-```typescript
-interface DrawingConfig {
-  strokeColor?: string;  // Default: "#000000"
-  strokeWidth?: number;  // Default: 2
-}
-```
+| Prop | Type | Description |
+|------|------|-------------|
+| `enableShapeMode` | `"rectangle" \| "circle" \| "arrow" \| null` | Active shape creation mode |
+| `onShapeComplete` | `(position: ScaledPosition, shape: ShapeData) => void` | Called when shape creation is finished |
+| `shapeStrokeColor` | `string` | Shape stroke color |
+| `shapeStrokeWidth` | `number` | Shape stroke width |
+
+### Search utilities
+
+`PdfHighlighterUtils` exposes `search(query, options)`, `findNext()`, `findPrevious()`, and `clearSearch()` using PDF.js `PDFFindController`.
 
 ---
 
@@ -357,7 +563,7 @@ interface DrawingConfig {
 ### HighlightType
 
 ```typescript
-type HighlightType = "text" | "area" | "freetext" | "image" | "drawing";
+type HighlightType = "text" | "area" | "freetext" | "image" | "drawing" | "shape";
 ```
 
 ### Highlight
@@ -370,6 +576,8 @@ interface Highlight {
   content?: {
     text?: string;
     image?: string;
+    strokes?: DrawingStroke[];
+    shape?: ShapeData;
   };
 }
 ```

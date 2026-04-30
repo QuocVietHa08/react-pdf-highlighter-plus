@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  Text highlights • Area highlights • Freetext notes • Images & signatures • Freehand drawing • PDF export
+  Text highlights • Area highlights • Freetext notes • Images & signatures • Freehand drawing • Shapes • Search • PDF export
 </p>
 
 ---
@@ -29,16 +29,23 @@
 
 `react-pdf-highlighter-plus` provides a highly customizable annotation experience for PDF documents in React applications. Built on [PDF.js](https://github.com/mozilla/pdf.js), it stores highlight positions in viewport-independent coordinates, making them portable across different screen sizes.
 
+<p align="center">
+  <img src="docs/react-pdf-highlight-plus.png" alt="react-pdf-highlighter-plus internal architecture" width="900">
+</p>
+
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Text Highlights** | Select and highlight text passages |
-| **Area Highlights** | Draw rectangular regions on PDFs |
-| **Freetext Notes** | Draggable, editable sticky notes with custom styling |
+| **Text Highlights** | Select and highlight text passages, restyle them, and copy their text |
+| **Area Highlights** | Draw rectangular regions on PDFs and copy intersecting PDF text |
+| **Freetext Notes** | Draggable, editable sticky notes with custom styling and compact mode |
 | **Images & Signatures** | Upload images or draw signatures directly on PDFs |
 | **Freehand Drawing** | Draw freehand annotations with customizable stroke |
+| **Shapes** | Add rectangles, circles, and arrows with editable stroke style |
+| **PDF Search** | Search through all PDF text with next/previous navigation |
 | **PDF Export** | Export annotated PDF with all highlights embedded |
+| **Local PDF Worker** | Uses the packaged PDF.js worker by default |
 | **Light/Dark Theme** | Eye-friendly dark mode with customizable intensity |
 | **Zoom Support** | Full zoom functionality with position-independent data |
 | **Fully Customizable** | Exposed styling on all components |
@@ -64,6 +71,8 @@ npm install react-pdf-highlighter-plus
 ```tsx
 import "react-pdf-highlighter-plus/style/style.css";
 ```
+
+PDF.js worker setup is handled by the package by default. The build copies the local `pdf.worker.min.mjs` into the package output, so most apps do not need to configure `workerSrc` manually.
 
 ---
 
@@ -125,6 +134,10 @@ Select text in the PDF to create highlights.
   style={{ background: "rgba(255, 226, 143, 1)" }}
 />
 ```
+
+Text and area highlight toolbars include a copy button. After copying, the icon changes to a check mark for 1.5 seconds.
+
+[Full Documentation →](docs/text-area-highlights.md)
 
 ### 2. Area Highlights
 
@@ -211,14 +224,12 @@ Draw freehand annotations directly on PDFs.
 import { DrawingHighlight } from "react-pdf-highlighter-plus";
 
 <PdfHighlighter
-  enableDrawingCreation={() => drawingMode}
-  onDrawingComplete={(position, dataUrl) => {
+  enableDrawingMode={drawingMode}
+  onDrawingComplete={(dataUrl, position, strokes) => {
     addHighlight({ type: "drawing", position, content: { image: dataUrl } });
   }}
-  drawingConfig={{
-    strokeColor: "#ff0000",
-    strokeWidth: 2,
-  }}
+  drawingStrokeColor="#ff0000"
+  drawingStrokeWidth={2}
 >
 
 // In your highlight container:
@@ -235,6 +246,54 @@ import { DrawingHighlight } from "react-pdf-highlighter-plus";
 - Drag to reposition
 
 [Full Documentation →](docs/drawing-highlights.md)
+
+---
+
+## Shapes
+
+Create rectangle, circle, and arrow annotations with editable stroke color and width.
+
+```tsx
+<PdfHighlighter
+  enableShapeMode={shapeMode} // "rectangle" | "circle" | "arrow" | null
+  onShapeComplete={(position, shape) => {
+    addHighlight({ type: "shape", position, content: { shape } });
+  }}
+  shapeStrokeColor="#000000"
+  shapeStrokeWidth={2}
+>
+  <HighlightContainer />
+</PdfHighlighter>
+```
+
+Shape geometry stays in the normal highlight layer while the style controls render in the higher config layer.
+
+[Full Documentation →](docs/shape-highlights.md)
+
+---
+
+## PDF Search
+
+Use `utilsRef` to access document-wide search helpers backed by PDF.js `PDFFindController`.
+
+```tsx
+const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
+
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  highlights={highlights}
+  utilsRef={(utils) => (highlighterUtilsRef.current = utils)}
+>
+  <HighlightContainer />
+</PdfHighlighter>
+
+highlighterUtilsRef.current?.search("TypeScript", {
+  highlightAll: true,
+  caseSensitive: false,
+});
+highlighterUtilsRef.current?.findNext();
+highlighterUtilsRef.current?.clearSearch();
+```
 
 ---
 
@@ -318,6 +377,7 @@ const handleExport = async () => {
 - Freetext notes (background + wrapped text)
 - Images & signatures (embedded PNG/JPG)
 - Freehand drawings (embedded PNG)
+- Shapes (rectangle, circle, arrow)
 
 [Full Documentation →](docs/pdf-export.md)
 
@@ -325,28 +385,19 @@ const handleExport = async () => {
 
 ## Component Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    PdfLoader                         │
-│  Loads PDF document via PDF.js                       │
-│                                                      │
-│  ┌───────────────────────────────────────────────┐  │
-│  │               PdfHighlighter                   │  │
-│  │  Manages viewer, events, coordinate systems   │  │
-│  │                                               │  │
-│  │  ┌─────────────────────────────────────────┐  │  │
-│  │  │      User-defined HighlightContainer    │  │  │
-│  │  │  Renders highlights using context hooks │  │  │
-│  │  │                                         │  │  │
-│  │  │  • TextHighlight                        │  │  │
-│  │  │  • AreaHighlight                        │  │  │
-│  │  │  • FreetextHighlight                    │  │  │
-│  │  │  • ImageHighlight                       │  │  │
-│  │  │  • DrawingHighlight                     │  │  │
-│  │  └─────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
-```
+The package renders React annotation components into PDF.js page overlay layers:
+
+| Layer | Mount point | Purpose |
+|-------|-------------|---------|
+| `.PdfHighlighter__highlight-layer` | Inside PDF.js `.textLayer` | Annotation geometry for text, area, image/signature, drawing, and shape |
+| `.PdfHighlighter__note-layer` | Direct child of PDF.js `.page` | Freetext notes and compact note markers above PDF content |
+| `.PdfHighlighter__config-layer` | Direct child of PDF.js `.page` | Toolbars, style panels, copy buttons, and controls above PDF content |
+
+Internal flow diagram:
+
+- [Architecture PNG](docs/react-pdf-highlight-plus.png)
+- [Draw.io source](docs/package-build-and-features.drawio)
+- [Draw.io XML copy](docs/package-build-and-features.xml)
 
 ### Context Hooks
 

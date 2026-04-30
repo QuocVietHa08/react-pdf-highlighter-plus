@@ -6,11 +6,13 @@
   cursor: pointer;
   position: absolute;
   background: rgba(255, 226, 143, 1);
-  transition: background 0.3s;
+  transition: background 0.3s, box-shadow 0.2s ease;
 }
 
 .AreaHighlight--scrolledTo .AreaHighlight__part {
-  background: #ff4141;
+  box-shadow:
+    0 0 0 2px #ff4141,
+    0 0 0 4px rgba(255, 65, 65, 0.2);
 }
 
 /* Toolbar wrapper - creates hover bridge between toolbar and highlight */
@@ -37,6 +39,7 @@
 }
 
 .AreaHighlight__style-button,
+.AreaHighlight__copy-button,
 .AreaHighlight__delete-button {
   display: flex;
   align-items: center;
@@ -53,6 +56,10 @@
 }
 
 .AreaHighlight__style-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.AreaHighlight__copy-button:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 

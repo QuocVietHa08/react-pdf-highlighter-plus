@@ -5,8 +5,11 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
 } from "react";
+import { createPortal } from "react-dom";
 import { Rnd } from "react-rnd";
+import { findOrCreateHighlightConfigLayer } from "../lib/highlight-config-layer";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import type { LTWHP, ShapeType, ViewportHighlight } from "../types";
 
@@ -177,7 +180,15 @@ export const ShapeHighlight = ({
 }: ShapeHighlightProps) => {
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
   const stylePanelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+    }
+  }, []);
 
   // Close style panel when clicking outside
   useEffect(() => {
@@ -299,9 +310,10 @@ export const ShapeHighlight = ({
     <div
       className={`ShapeHighlight ${highlightClass}`}
       onContextMenu={onContextMenu}
+      ref={containerRef}
     >
-      {/* Toolbar wrapper - extends down to overlap with shape */}
-      {(onStyleChange || onDelete) && (
+      {configLayer && (onStyleChange || onDelete) &&
+        createPortal(
         <div
           className="ShapeHighlight__toolbar-wrapper"
           style={{
@@ -314,7 +326,7 @@ export const ShapeHighlight = ({
           onMouseLeave={() => setIsHovered(false)}
         >
           <div
-            className={`ShapeHighlight__toolbar ${isHovered || isStylePanelOpen ? "ShapeHighlight__toolbar--visible" : ""}`}
+            className={`ShapeHighlight__toolbar ${isHovered || isScrolledTo || isStylePanelOpen ? "ShapeHighlight__toolbar--visible" : ""}`}
           >
             {onStyleChange && (
               <button
@@ -393,8 +405,9 @@ export const ShapeHighlight = ({
               </div>
             </div>
           )}
-        </div>
-      )}
+        </div>,
+          configLayer,
+        )}
 
       <Rnd
         onMouseEnter={() => setIsHovered(true)}

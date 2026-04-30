@@ -5,8 +5,15 @@ import React, {
   useState,
   useRef,
   useEffect,
+  useLayoutEffect,
 } from "react";
+import { createPortal } from "react-dom";
 
+import {
+  copyTextToClipboard,
+  extractTextFromHighlightRect,
+} from "../lib/copy-highlight-content";
+import { findOrCreateHighlightConfigLayer } from "../lib/highlight-config-layer";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import { Rnd } from "react-rnd";
 import type { LTWHP, ViewportHighlight } from "../types";
@@ -77,6 +84,11 @@ export interface AreaHighlightProps {
   onStyleChange?(style: AreaHighlightStyle): void;
 
   /**
+   * Text to copy for this area highlight.
+   */
+  copyText?: string;
+
+  /**
    * Callback triggered when the delete button is clicked.
    */
   onDelete?(): void;
@@ -111,6 +123,18 @@ const DefaultDeleteIcon = () => (
   </svg>
 );
 
+const DefaultCopyIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+  </svg>
+);
+
+const DefaultCopiedIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+  </svg>
+);
+
 // Default color presets
 const DEFAULT_COLOR_PRESETS = [
   "rgba(255, 226, 143, 1)", // Yellow (default)
@@ -138,11 +162,30 @@ export const AreaHighlight = ({
   onDelete,
   styleIcon,
   deleteIcon,
+  copyText,
   colorPresets = DEFAULT_COLOR_PRESETS,
 }: AreaHighlightProps) => {
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
+  const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
   const stylePanelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const copyResetTimeoutRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (containerRef.current) {
+      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current) {
+        window.clearTimeout(copyResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Close style panel when clicking outside
   useEffect(() => {
@@ -182,13 +225,40 @@ export const AreaHighlight = ({
     backgroundColor: highlightColor,
   };
 
+  const handleCopy = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    const text =
+      copyText ||
+      highlight.content?.text ||
+      (containerRef.current
+        ? extractTextFromHighlightRect(
+            containerRef.current,
+            highlight.position.boundingRect,
+          )
+        : "");
+
+    await copyTextToClipboard(text);
+    setIsCopied(true);
+
+    if (copyResetTimeoutRef.current) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setIsCopied(false);
+      copyResetTimeoutRef.current = null;
+    }, 1500);
+  };
+
   return (
     <div
       className={`AreaHighlight ${highlightClass}`}
       onContextMenu={onContextMenu}
+      ref={containerRef}
     >
-      {/* Toolbar wrapper - extends down to overlap with highlight */}
-      {(onStyleChange || onDelete) && (
+      {configLayer && (onStyleChange || onDelete) &&
+        createPortal(
         <div
           className="AreaHighlight__toolbar-wrapper"
           style={{
@@ -201,7 +271,7 @@ export const AreaHighlight = ({
           onMouseLeave={() => setIsHovered(false)}
         >
           <div
-            className={`AreaHighlight__toolbar ${isHovered || isStylePanelOpen ? "AreaHighlight__toolbar--visible" : ""}`}
+            className={`AreaHighlight__toolbar ${isHovered || isScrolledTo || isStylePanelOpen ? "AreaHighlight__toolbar--visible" : ""}`}
           >
             {onStyleChange && (
               <button
@@ -216,6 +286,14 @@ export const AreaHighlight = ({
                 {styleIcon || <DefaultStyleIcon />}
               </button>
             )}
+            <button
+              className="AreaHighlight__copy-button"
+              onClick={handleCopy}
+              title={isCopied ? "Copied" : "Copy text"}
+              type="button"
+            >
+              {isCopied ? <DefaultCopiedIcon /> : <DefaultCopyIcon />}
+            </button>
             {onDelete && (
               <button
                 className="AreaHighlight__delete-button"
@@ -264,8 +342,9 @@ export const AreaHighlight = ({
               </div>
             </div>
           )}
-        </div>
-      )}
+        </div>,
+          configLayer,
+        )}
 
       <Rnd
         onMouseEnter={() => setIsHovered(true)}

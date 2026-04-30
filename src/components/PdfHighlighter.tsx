@@ -1,4 +1,3 @@
-import debounce from "lodash.debounce";
 import { PDFDocumentProxy } from "pdfjs-dist";
 import React, {
   CSSProperties,
@@ -13,6 +12,7 @@ import React, {
 import { createRoot } from "react-dom/client";
 import {
   PdfHighlighterContext,
+  PdfSearchOptions,
   PdfHighlighterUtils,
 } from "../contexts/PdfHighlighterContext";
 import { scaledToViewport, viewportPositionToScaled } from "../lib/coordinates";
@@ -22,6 +22,7 @@ import groupHighlightsByPage from "../lib/group-highlights-by-page";
 import {
   asElement,
   findOrCreateContainerLayer,
+  getDocument,
   getPageFromElement,
   getPagesFromRange,
   getWindow,
@@ -47,14 +48,15 @@ import { MouseSelection } from "./MouseSelection";
 import { ShapeCanvas } from "./ShapeCanvas";
 import { TipContainer } from "./TipContainer";
 
-import type { EventBus as TEventBus, PDFLinkService as TPDFLinkService, PDFViewer as TPDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import type { EventBus as TEventBus, PDFFindController as TPDFFindController, PDFLinkService as TPDFLinkService, PDFViewer as TPDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
 
-let EventBus: typeof TEventBus, PDFLinkService: typeof TPDFLinkService, PDFViewer: typeof TPDFViewer;
+let EventBus: typeof TEventBus, PDFFindController: typeof TPDFFindController, PDFLinkService: typeof TPDFLinkService, PDFViewer: typeof TPDFViewer;
 
 (async () => {
   // Due to breaking changes in PDF.js 4.0.189. See issue #17228
   const pdfjs = await import("pdfjs-dist/web/pdf_viewer.mjs");
   EventBus = pdfjs.EventBus;
+  PDFFindController = pdfjs.PDFFindController;
   PDFLinkService = pdfjs.PDFLinkService;
   PDFViewer = pdfjs.PDFViewer;
 })();
@@ -130,6 +132,30 @@ const findOrCreateHighlightLayer = (textLayer: HTMLElement) => {
     "PdfHighlighter__highlight-layer",
   );
 };
+
+const findOrCreateNoteLayer = (textLayer: HTMLElement) => {
+  const pageLayer = textLayer.closest(".page") as HTMLElement | null;
+  const container = pageLayer;
+
+  if (!container) return null;
+
+  const doc = getDocument(container);
+  let layer = Array.from(container.children).find((child) =>
+    child.classList.contains("PdfHighlighter__note-layer"),
+  );
+
+  // To ensure predictable zIndexing, wait until the pdfjs element has children.
+  if (!layer && container.children.length) {
+    layer = doc.createElement("div");
+    layer.className = "PdfHighlighter__note-layer";
+    container.appendChild(layer);
+  }
+
+  return layer;
+};
+
+const isFreetextHighlight = (highlight: Highlight | GhostHighlight) =>
+  "type" in highlight && highlight.type === "freetext";
 
 const disableTextSelection = (viewer: InstanceType<typeof PDFViewer>, flag: boolean) => {
   viewer.viewer?.classList.toggle("PdfHighlighter--disable-selection", flag);
@@ -396,6 +422,9 @@ export const PdfHighlighter = ({
   const highlightBindingsRef = useRef<{ [page: number]: HighlightBindings }>(
     {},
   );
+  const noteBindingsRef = useRef<{ [page: number]: HighlightBindings }>({});
+  const highlightsRef = useRef(highlights);
+  const childrenRef = useRef(children);
   const ghostHighlightRef = useRef<GhostHighlight | null>(null);
   const selectionRef = useRef<PdfSelection | null>(null);
   const scrolledToHighlightIdRef = useRef<string | null>(null);
@@ -411,35 +440,45 @@ export const PdfHighlighter = ({
     }),
   );
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const renderRetryTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>(
+    [],
+  );
+  const resumeScrollAwayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null);
   const viewerRef = useRef<InstanceType<typeof PDFViewer> | null>(null);
+
+  highlightsRef.current = highlights;
+  childrenRef.current = children;
 
   // Initialise PDF Viewer
   useLayoutEffect(() => {
     if (!containerNodeRef.current) return;
 
-    const debouncedDocumentInit = debounce(() => {
-      viewerRef.current =
-        viewerRef.current ||
-        new PDFViewer({
-          container: containerNodeRef.current!,
-          eventBus: eventBusRef.current,
-          textLayerMode: 2,
-          removePageBorders: true,
-          linkService: linkServiceRef.current,
-        });
+    findControllerRef.current =
+      findControllerRef.current ||
+      new PDFFindController({
+        eventBus: eventBusRef.current,
+        linkService: linkServiceRef.current,
+      });
 
-      viewerRef.current.setDocument(pdfDocument);
-      linkServiceRef.current.setDocument(pdfDocument);
-      linkServiceRef.current.setViewer(viewerRef.current);
-      setIsViewerReady(true);
-    }, 100);
+    viewerRef.current =
+      viewerRef.current ||
+      new PDFViewer({
+        container: containerNodeRef.current,
+        eventBus: eventBusRef.current,
+        findController: findControllerRef.current,
+        textLayerMode: 2,
+        removePageBorders: true,
+        linkService: linkServiceRef.current,
+      });
 
-    debouncedDocumentInit();
-
-    return () => {
-      debouncedDocumentInit.cancel();
-    };
-  }, [document]);
+    viewerRef.current.setDocument(pdfDocument);
+    linkServiceRef.current.setDocument(pdfDocument);
+    linkServiceRef.current.setViewer(viewerRef.current);
+    setIsViewerReady(true);
+  }, [pdfDocument]);
 
   // Initialise viewer event listeners
   useLayoutEffect(() => {
@@ -450,17 +489,27 @@ export const PdfHighlighter = ({
 
     const doc = containerNodeRef.current.ownerDocument;
 
-    eventBusRef.current.on("textlayerrendered", renderHighlightLayers);
+    eventBusRef.current.on("textlayerrendered", scheduleRenderHighlightLayers);
+    eventBusRef.current.on("pagerendered", scheduleRenderHighlightLayers);
     eventBusRef.current.on("pagesinit", handleScaleValue);
     doc.addEventListener("keydown", handleKeyDown);
+    doc.addEventListener("copy", handleCopy, true);
 
-    renderHighlightLayers();
+    scheduleRenderHighlightLayers();
 
     return () => {
       eventBusRef.current.off("pagesinit", handleScaleValue);
-      eventBusRef.current.off("textlayerrendered", renderHighlightLayers);
+      eventBusRef.current.off("pagerendered", scheduleRenderHighlightLayers);
+      eventBusRef.current.off("textlayerrendered", scheduleRenderHighlightLayers);
       doc.removeEventListener("keydown", handleKeyDown);
+      doc.removeEventListener("copy", handleCopy, true);
       resizeObserverRef.current?.disconnect();
+      renderRetryTimeoutsRef.current.forEach(clearTimeout);
+      renderRetryTimeoutsRef.current = [];
+      if (resumeScrollAwayTimeoutRef.current) {
+        clearTimeout(resumeScrollAwayTimeoutRef.current);
+        resumeScrollAwayTimeoutRef.current = null;
+      }
     };
   }, [selectionTip, highlights, onSelectionFinished]);
 
@@ -628,6 +677,50 @@ export const PdfHighlighter = ({
     }
   };
 
+  const handleCopy = (event: ClipboardEvent) => {
+    const container = containerNodeRef.current;
+
+    if (!container || !event.clipboardData) return;
+
+    const target = event.target;
+    const targetElement =
+      target instanceof HTMLElement
+        ? target
+        : target instanceof Node
+          ? target.parentElement
+          : null;
+
+    if (
+      targetElement &&
+      (targetElement.closest("input, textarea, [contenteditable='true']") ||
+        targetElement.closest(".PdfHighlighter__tip-container"))
+    ) {
+      return;
+    }
+
+    const selection = getWindow(container).getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      !range ||
+      !container.contains(range.commonAncestorContainer)
+    ) {
+      return;
+    }
+
+    const text =
+      selectionRef.current?.content.text?.trim() ||
+      selection.toString().split("\n").join(" ").trim();
+
+    if (!text) return;
+
+    event.clipboardData.setData("text/plain", text);
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   const handleScaleValue = () => {
     if (viewerRef.current) {
       viewerRef.current.currentScaleValue = pdfScaleValue.toString();
@@ -638,6 +731,7 @@ export const PdfHighlighter = ({
   const renderHighlightLayer = (
     highlightBindings: HighlightBindings,
     pageNumber: number,
+    shouldRenderHighlight?: (highlight: Highlight | GhostHighlight) => boolean,
   ) => {
     if (!viewerRef.current) return;
 
@@ -645,14 +739,15 @@ export const PdfHighlighter = ({
       <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
         <HighlightLayer
           highlightsByPage={groupHighlightsByPage([
-            ...highlights,
+            ...highlightsRef.current,
             ghostHighlightRef.current,
           ])}
           pageNumber={pageNumber}
           scrolledToHighlightId={scrolledToHighlightIdRef.current}
           viewer={viewerRef.current}
           highlightBindings={highlightBindings}
-          children={children}
+          shouldRenderHighlight={shouldRenderHighlight}
+          children={childrenRef.current}
         />
       </PdfHighlighterContext.Provider>,
     );
@@ -662,36 +757,73 @@ export const PdfHighlighter = ({
     if (!viewerRef.current) return;
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
-      const highlightBindings = highlightBindingsRef.current[pageNumber];
+      const { textLayer } = viewerRef.current!.getPageView(pageNumber - 1) || {};
+      if (!textLayer) continue; // Viewer hasn't rendered page yet
 
-      // Need to check if container is still attached to the DOM as PDF.js can unload pages.
-      if (highlightBindings?.container?.isConnected) {
-        renderHighlightLayer(highlightBindings, pageNumber);
-      } else {
-        const { textLayer } =
-          viewerRef.current!.getPageView(pageNumber - 1) || {};
-        if (!textLayer) continue; // Viewer hasn't rendered page yet
+      const textLayerDiv = textLayer.div; // textLayer.div for version >=3.0 and textLayer.textLayerDiv otherwise.
+      const highlightLayer = findOrCreateHighlightLayer(textLayerDiv);
+      const noteLayer = findOrCreateNoteLayer(textLayerDiv);
 
-        // textLayer.div for version >=3.0 and textLayer.textLayerDiv otherwise.
-        const highlightLayer = findOrCreateHighlightLayer(
-          textLayer.div,
-        );
+      if (highlightLayer) {
+        let highlightBindings = highlightBindingsRef.current[pageNumber];
 
-        if (highlightLayer) {
-          const reactRoot = createRoot(highlightLayer);
-          highlightBindingsRef.current[pageNumber] = {
-            reactRoot,
+        // Need to check if container is still attached to the DOM as PDF.js can unload pages.
+        if (!highlightBindings?.container?.isConnected) {
+          highlightBindings = {
+            reactRoot: createRoot(highlightLayer),
             container: highlightLayer,
-            textLayer: textLayer.div, // textLayer.div for version >=3.0 and textLayer.textLayerDiv otherwise.
+            textLayer: textLayerDiv,
           };
-
-          renderHighlightLayer(
-            highlightBindingsRef.current[pageNumber],
-            pageNumber,
-          );
+          highlightBindingsRef.current[pageNumber] = highlightBindings;
         }
+
+        renderHighlightLayer(
+          highlightBindings,
+          pageNumber,
+          (highlight) => !isFreetextHighlight(highlight),
+        );
+      }
+
+      if (noteLayer) {
+        let noteBindings = noteBindingsRef.current[pageNumber];
+
+        if (!noteBindings?.container?.isConnected) {
+          noteBindings = {
+            reactRoot: createRoot(noteLayer),
+            container: noteLayer,
+            textLayer: textLayerDiv,
+          };
+          noteBindingsRef.current[pageNumber] = noteBindings;
+        }
+
+        renderHighlightLayer(noteBindings, pageNumber, isFreetextHighlight);
       }
     }
+  };
+
+  const scheduleRenderHighlightLayers = () => {
+    renderHighlightLayers();
+
+    renderRetryTimeoutsRef.current.forEach(clearTimeout);
+    renderRetryTimeoutsRef.current = [50, 150, 350, 750, 1200].map((delay) =>
+      setTimeout(renderHighlightLayers, delay),
+    );
+  };
+
+  const resumeScrollAwayListenerAfterNavigation = () => {
+    const container = viewerRef.current?.container;
+    if (!container) return;
+
+    if (resumeScrollAwayTimeoutRef.current) {
+      clearTimeout(resumeScrollAwayTimeoutRef.current);
+    }
+
+    resumeScrollAwayTimeoutRef.current = setTimeout(() => {
+      container.addEventListener("scroll", handleScroll, {
+        once: true,
+      });
+      resumeScrollAwayTimeoutRef.current = null;
+    }, 1200);
   };
 
   // Utils
@@ -761,14 +893,66 @@ export const PdfHighlighter = ({
     });
 
     scrolledToHighlightIdRef.current = highlight.id;
-    renderHighlightLayers();
+    scheduleRenderHighlightLayers();
 
-    // wait for scrolling to finish
-    setTimeout(() => {
-      viewerRef.current!.container.addEventListener("scroll", handleScroll, {
-        once: true,
-      });
-    }, 100);
+    resumeScrollAwayListenerAfterNavigation();
+  };
+
+  const dispatchFind = (
+    query: string,
+    findPrevious: boolean,
+    options: PdfSearchOptions = {},
+    type?: "again" | "highlightallchange",
+  ) => {
+    eventBusRef.current.dispatch("find", {
+      source: findControllerRef.current || viewerRef.current,
+      type,
+      query,
+      phraseSearch: true,
+      caseSensitive: options.caseSensitive ?? false,
+      entireWord: options.entireWord ?? false,
+      highlightAll: options.highlightAll ?? true,
+      findPrevious,
+      matchDiacritics: options.matchDiacritics ?? false,
+    });
+  };
+
+  const currentSearchRef = useRef<{
+    query: string;
+    options: PdfSearchOptions;
+  }>({
+    query: "",
+    options: {},
+  });
+
+  const search = (query: string, options: PdfSearchOptions = {}) => {
+    currentSearchRef.current = { query, options };
+
+    if (!query.trim()) {
+      clearSearch();
+      return;
+    }
+
+    dispatchFind(query, false, options);
+  };
+
+  const findNext = () => {
+    const { query, options } = currentSearchRef.current;
+    if (!query.trim()) return;
+    dispatchFind(query, false, options, "again");
+  };
+
+  const findPrevious = () => {
+    const { query, options } = currentSearchRef.current;
+    if (!query.trim()) return;
+    dispatchFind(query, true, options, "again");
+  };
+
+  const clearSearch = () => {
+    currentSearchRef.current = { query: "", options: {} };
+    eventBusRef.current.dispatch("findbarclose", {
+      source: findControllerRef.current || viewerRef.current,
+    });
   };
 
   const pdfHighlighterUtils: PdfHighlighterUtils = {
@@ -787,6 +971,10 @@ export const PdfHighlighter = ({
     updateTipPosition: updateTipPositionRef.current,
     getLinkService: () => linkServiceRef.current,
     getEventBus: () => eventBusRef.current,
+    search,
+    findNext,
+    findPrevious,
+    clearSearch,
     goToPage: (pageNumber: number) => {
       console.log('[PdfHighlighter] goToPage called with page:', pageNumber);
       const viewer = viewerRef.current;
@@ -916,6 +1104,9 @@ export const PdfHighlighter = ({
             filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(1.05);
           }
           .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
+            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(0.95);
+          }
+          .PdfHighlighter--dark .PdfHighlighter__note-layer {
             filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(0.95);
           }
           ` : ''}

@@ -14,6 +14,8 @@ Drawing highlights (`type: "drawing"`) enable users to:
 
 Drawings are stored as PNG images, making them compatible with PDF export.
 
+Drawing geometry renders in `.PdfHighlighter__highlight-layer`. The floating toolbar and style controls render in `.PdfHighlighter__config-layer`, so controls stay above PDF content without changing drawing placement.
+
 ---
 
 ## Quick Start
@@ -22,12 +24,10 @@ Drawings are stored as PNG images, making them compatible with PDF export.
 
 ```tsx
 <PdfHighlighter
-  enableDrawingCreation={() => drawingMode}
+  enableDrawingMode={drawingMode}
   onDrawingComplete={handleDrawingComplete}
-  drawingConfig={{
-    strokeColor: "#ff0000",
-    strokeWidth: 2,
-  }}
+  drawingStrokeColor="#ff0000"
+  drawingStrokeWidth={2}
   highlights={highlights}
 >
   <HighlightContainer />
@@ -39,12 +39,16 @@ Drawings are stored as PNG images, making them compatible with PDF export.
 ```tsx
 const [drawingMode, setDrawingMode] = useState(false);
 
-const handleDrawingComplete = (position: ScaledPosition, dataUrl: string) => {
+const handleDrawingComplete = (
+  dataUrl: string,
+  position: ScaledPosition,
+  strokes: DrawingStroke[],
+) => {
   const newHighlight: Highlight = {
     id: generateId(),
     type: "drawing",
     position,
-    content: { image: dataUrl },
+    content: { image: dataUrl, strokes },
   };
   setHighlights([newHighlight, ...highlights]);
   setDrawingMode(false);
@@ -54,7 +58,7 @@ const handleDrawingComplete = (position: ScaledPosition, dataUrl: string) => {
 ### 3. Render DrawingHighlight in Your Container
 
 ```tsx
-import { DrawingHighlight, useHighlightContainerContext } from "react-pdf-highlighter-extended";
+import { DrawingHighlight, useHighlightContainerContext } from "react-pdf-highlighter-plus";
 
 const HighlightContainer = ({ editHighlight }) => {
   const { highlight, viewportToScaled, isScrolledTo, highlightBindings } = useHighlightContainerContext();
@@ -92,18 +96,10 @@ const HighlightContainer = ({ editHighlight }) => {
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `enableDrawingCreation` | `(event: MouseEvent) => boolean` | Returns true when drawing mode is active |
-| `onDrawingComplete` | `(position: ScaledPosition, dataUrl: string) => void` | Called when user finishes drawing |
-| `drawingConfig` | `DrawingConfig` | Stroke color and width settings |
-
-### DrawingConfig
-
-```typescript
-interface DrawingConfig {
-  strokeColor?: string;  // Default: "#000000"
-  strokeWidth?: number;  // Default: 2
-}
-```
+| `enableDrawingMode` | `boolean` | Whether drawing mode is active |
+| `onDrawingComplete` | `(dataUrl: string, position: ScaledPosition, strokes: DrawingStroke[]) => void` | Called when user finishes drawing |
+| `drawingStrokeColor` | `string` | Stroke color |
+| `drawingStrokeWidth` | `number` | Stroke width |
 
 ### DrawingHighlight Props
 
@@ -159,7 +155,7 @@ import {
   usePdfHighlighterContext,
   ScaledPosition,
   Highlight,
-} from "react-pdf-highlighter-extended";
+} from "react-pdf-highlighter-plus";
 
 const App = () => {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -168,12 +164,16 @@ const App = () => {
   const [strokeWidth, setStrokeWidth] = useState(2);
   const highlighterUtilsRef = useRef<PdfHighlighterUtils>();
 
-  const handleDrawingComplete = (position: ScaledPosition, dataUrl: string) => {
+  const handleDrawingComplete = (
+    dataUrl: string,
+    position: ScaledPosition,
+    strokes: DrawingStroke[],
+  ) => {
     const newHighlight: Highlight = {
       id: String(Math.random()).slice(2),
       type: "drawing",
       position,
-      content: { image: dataUrl },
+      content: { image: dataUrl, strokes },
     };
     setHighlights([newHighlight, ...highlights]);
     setDrawingMode(false);
@@ -228,12 +228,10 @@ const App = () => {
             pdfDocument={pdfDocument}
             highlights={highlights}
             utilsRef={(utils) => (highlighterUtilsRef.current = utils)}
-            enableDrawingCreation={() => drawingMode}
+            enableDrawingMode={drawingMode}
             onDrawingComplete={handleDrawingComplete}
-            drawingConfig={{
-              strokeColor,
-              strokeWidth,
-            }}
+            drawingStrokeColor={strokeColor}
+            drawingStrokeWidth={strokeWidth}
           >
             <HighlightContainer editHighlight={editHighlight} />
           </PdfHighlighter>
@@ -345,7 +343,7 @@ The `content.image` field contains a base64-encoded PNG data URL of the drawing 
 Drawings are fully supported in PDF export. They are embedded as PNG images at their exact position and size on the page.
 
 ```tsx
-import { exportPdf } from "react-pdf-highlighter-extended";
+import { exportPdf } from "react-pdf-highlighter-plus";
 
 const pdfBytes = await exportPdf(pdfUrl, highlights);
 // Drawings are automatically included

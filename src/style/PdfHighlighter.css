@@ -35,6 +35,53 @@
   position: absolute;
 }
 
+.PdfHighlighter__highlight-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.textLayer > .PdfHighlighter__highlight-layer {
+  z-index: 4;
+}
+
+.PdfHighlighter__note-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+.PdfHighlighter__config-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+.PdfHighlighter__highlight-layer > div,
+.PdfHighlighter__highlight-layer .MonitoredHighlightContainer,
+.PdfHighlighter__highlight-layer .TextHighlight,
+.PdfHighlighter__highlight-layer .AreaHighlight,
+.PdfHighlighter__highlight-layer .FreetextHighlight,
+.PdfHighlighter__highlight-layer .ImageHighlight,
+.PdfHighlighter__highlight-layer .DrawingHighlight,
+.PdfHighlighter__highlight-layer .ShapeHighlight {
+  pointer-events: auto;
+}
+
+.PdfHighlighter__note-layer > div,
+.PdfHighlighter__note-layer .FreetextHighlight {
+  pointer-events: auto;
+}
+
+.PdfHighlighter__config-layer > * {
+  pointer-events: auto;
+}
+
 .PdfHighlighter--disable-selection {
   user-select: none;
   pointer-events: none;
@@ -87,5 +134,13 @@
 
 /* Double-invert highlights to preserve their original colors */
 .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+}
+
+.PdfHighlighter--dark .PdfHighlighter__note-layer {
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+}
+
+.PdfHighlighter--dark .PdfHighlighter__config-layer {
   filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
 }

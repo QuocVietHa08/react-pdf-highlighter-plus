@@ -56,14 +56,32 @@ import {
   viewportPositionToScaled,
   scaledPositionToViewport,
 } from "./lib/coordinates";
-import {
-  exportPdf,
+import type {
   ExportPdfOptions,
   ExportableHighlight,
 } from "./lib/export-pdf";
+import {
+  extractPageTextItems,
+  extractSentences,
+  extractTextUnits,
+  sentenceToHighlight,
+} from "./lib/extract-sentences";
+import type {
+  ExtractSentencesOptions,
+  PdfColumnDetection,
+  PdfExtractedPage,
+  PdfReadingOrder,
+  PdfSentence,
+  PdfSentenceSource,
+  PdfTextColumn,
+  PdfTextUnit,
+  PdfTextUnitType,
+  PdfTextItem,
+} from "./lib/extract-sentences";
 
 import {
   PdfHighlighterUtils,
+  PdfSearchOptions,
   usePdfHighlighterContext,
 } from "./contexts/PdfHighlighterContext";
 
@@ -110,6 +128,13 @@ import { useDocumentOutline } from "./hooks/useDocumentOutline";
 import { useThumbnails } from "./hooks/useThumbnails";
 import { usePageNavigation } from "./hooks/usePageNavigation";
 
+const exportPdf: typeof import("./lib/export-pdf").exportPdf = async (
+  ...args
+) => {
+  const { exportPdf } = await import("./lib/export-pdf");
+  return exportPdf(...args);
+};
+
 export {
   PdfHighlighter,
   PdfLoader,
@@ -138,11 +163,16 @@ export {
   useDocumentOutline,
   useThumbnails,
   usePageNavigation,
+  extractPageTextItems,
+  extractSentences,
+  extractTextUnits,
+  sentenceToHighlight,
 };
 
 export type {
   HighlightContainerUtils,
   PdfHighlighterUtils,
+  PdfSearchOptions,
   PdfHighlighterProps,
   PdfHighlighterTheme,
   TextHighlightProps,
@@ -162,6 +192,16 @@ export type {
   PdfLoaderProps,
   ExportPdfOptions,
   ExportableHighlight,
+  ExtractSentencesOptions,
+  PdfColumnDetection,
+  PdfExtractedPage,
+  PdfReadingOrder,
+  PdfSentence,
+  PdfSentenceSource,
+  PdfTextColumn,
+  PdfTextUnit,
+  PdfTextUnitType,
+  PdfTextItem,
   // Left Panel types
   LeftPanelProps,
   LeftPanelTheme,

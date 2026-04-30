@@ -1,5 +1,16 @@
 .FreetextHighlight {
   position: absolute;
+  z-index: 30;
+  isolation: isolate;
+}
+
+.FreetextHighlight--editing,
+.FreetextHighlight:hover {
+  z-index: 40;
+}
+
+.FreetextHighlight--collapsed {
+  z-index: 35;
 }
 
 .FreetextHighlight__container {
@@ -11,6 +22,10 @@
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
   overflow: visible;
   transition: box-shadow 0.2s ease;
+}
+
+.FreetextHighlight__rnd {
+  z-index: inherit;
 }
 
 .FreetextHighlight__container:hover {
@@ -246,4 +261,49 @@
 
 .FreetextHighlight__delete-button:hover {
   background: rgba(255, 100, 100, 0.6);
+}
+
+.FreetextHighlight__collapse-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: white;
+  border-radius: 3px;
+  padding: 0;
+  transition: background 0.2s;
+}
+
+.FreetextHighlight__collapse-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.FreetextHighlight--collapsed .FreetextHighlight__container {
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+
+.FreetextHighlight__compact-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.FreetextHighlight__compact-button:hover {
+  background: rgba(0, 0, 0, 0.08);
 }

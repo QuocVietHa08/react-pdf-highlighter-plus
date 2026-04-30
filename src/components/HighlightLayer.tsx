@@ -55,6 +55,11 @@ export interface HighlightLayerProps {
    * a single {@link TextHighlight}, {@link AreaHighlight}, etc., in the correct place.
    */
   children: ReactNode;
+
+  /**
+   * Optional predicate for splitting highlights across multiple DOM layers.
+   */
+  shouldRenderHighlight?(highlight: Highlight | GhostHighlight): boolean;
 }
 
 /**
@@ -73,8 +78,11 @@ export const HighlightLayer = ({
   viewer,
   highlightBindings,
   children,
+  shouldRenderHighlight,
 }: HighlightLayerProps) => {
-  const currentHighlights = highlightsByPage[pageNumber] || [];
+  const currentHighlights = (highlightsByPage[pageNumber] || []).filter(
+    (highlight) => shouldRenderHighlight?.(highlight) ?? true,
+  );
 
   return (
     <div>

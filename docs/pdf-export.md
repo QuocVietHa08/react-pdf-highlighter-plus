@@ -17,7 +17,7 @@ The `exportPdf` function allows you to:
 ## Quick Start
 
 ```tsx
-import { exportPdf } from "react-pdf-highlighter-extended";
+import { exportPdf } from "react-pdf-highlighter-plus";
 
 const handleExport = async () => {
   const pdfBytes = await exportPdf(pdfUrl, highlights);
@@ -84,10 +84,11 @@ interface ExportPdfOptions {
 ```typescript
 interface ExportableHighlight {
   id: string;
-  type?: "text" | "area" | "freetext" | "image" | "drawing";
+  type?: "text" | "area" | "freetext" | "image" | "drawing" | "shape";
   content?: {
     text?: string;    // For freetext
     image?: string;   // Base64 data URL for images/drawings
+    shape?: ShapeData; // For rectangle, circle, and arrow annotations
   };
   position: ScaledPosition;
 
@@ -105,6 +106,11 @@ interface ExportableHighlight {
 
   /** Font family (freetext only - uses Helvetica in export) */
   fontFamily?: string;
+
+  /** Shape style overrides */
+  shapeType?: "rectangle" | "circle" | "arrow";
+  strokeColor?: string;
+  strokeWidth?: number;
 }
 ```
 
@@ -190,6 +196,24 @@ const highlight = {
 };
 ```
 
+### Shape Highlights
+
+Shapes are rendered as vector annotations during export. Rectangle and circle highlights use their bounding box and stroke style. Arrow highlights use their stored start and end points when available.
+
+```tsx
+const highlight = {
+  type: "shape",
+  content: {
+    shape: {
+      shapeType: "arrow",
+      strokeColor: "#000000",
+      strokeWidth: 2,
+    },
+  },
+  position: { ... },
+};
+```
+
 ---
 
 ## Complete Example
@@ -201,7 +225,7 @@ import {
   PdfLoader,
   exportPdf,
   Highlight,
-} from "react-pdf-highlighter-extended";
+} from "react-pdf-highlighter-plus";
 
 const App = () => {
   const [highlights, setHighlights] = useState<Highlight[]>([]);

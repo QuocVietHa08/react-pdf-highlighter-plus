@@ -31,6 +31,16 @@
   transition: opacity 0.2s ease;
 }
 
+.DrawingHighlight__toolbar--floating {
+  position: absolute;
+  top: auto;
+  left: auto;
+}
+
+.DrawingHighlight__toolbar--visible {
+  opacity: 1;
+}
+
 .DrawingHighlight__container:hover .DrawingHighlight__toolbar {
   opacity: 1;
 }

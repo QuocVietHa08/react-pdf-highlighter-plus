@@ -219,10 +219,12 @@ export const AreaHighlight = ({
   // User moves Rnd -> Rnd records new pos -> Rnd jumps back -> highlight updates -> Rnd re-renders at new pos
   const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}`;
 
-  // Merge custom style with highlight color
+  // Merge custom style with highlight color. --hl-fill-alpha (set <100% in dark
+  // mode) keeps the fill translucent so underlying content stays visible while
+  // the border ring stays crisp (no element opacity). Light mode = 100%.
   const mergedStyle: CSSProperties = {
     ...style,
-    backgroundColor: highlightColor,
+    backgroundColor: `color-mix(in srgb, ${highlightColor} var(--hl-fill-alpha, 100%), transparent)`,
   };
 
   const handleCopy = async (event: React.MouseEvent<HTMLButtonElement>) => {

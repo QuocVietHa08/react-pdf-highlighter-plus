@@ -160,14 +160,14 @@ export const OutlineItem: React.FC<OutlineItemProps> = ({
   const defaultExpandIconStyle: React.CSSProperties = {
     width: 12,
     height: 12,
-    color: '#64748b',
+    color: 'var(--lp-muted, #64748b)',
   };
 
   const defaultActiveIndicatorStyle: React.CSSProperties = {
     width: 6,
     height: 6,
     borderRadius: '50%',
-    backgroundColor: '#3b82f6',
+    backgroundColor: 'var(--lp-accent, #3b82f6)',
     flexShrink: 0,
   };
 
@@ -179,18 +179,18 @@ export const OutlineItem: React.FC<OutlineItemProps> = ({
     fontSize: '13px',
     fontWeight: 400,
     fontStyle: item.italic ? 'italic' : 'normal',
-    color: '#475569',
+    color: 'var(--lp-text, #475569)',
     lineHeight: 1.4,
   };
 
   const defaultTitleActiveStyle: React.CSSProperties = {
     fontWeight: 500,
-    color: '#1e40af',
+    color: 'var(--lp-accent, #1e40af)',
   };
 
   const defaultPageNumberStyle: React.CSSProperties = {
     fontSize: '11px',
-    color: '#94a3b8',
+    color: 'var(--lp-muted, #94a3b8)',
     flexShrink: 0,
     fontVariantNumeric: 'tabular-nums',
     minWidth: '20px',
@@ -198,7 +198,7 @@ export const OutlineItem: React.FC<OutlineItemProps> = ({
   };
 
   const defaultPageNumberActiveStyle: React.CSSProperties = {
-    color: '#3b82f6',
+    color: 'var(--lp-accent, #3b82f6)',
   };
 
   const defaultChildrenContainerStyle: React.CSSProperties = {
@@ -209,7 +209,7 @@ export const OutlineItem: React.FC<OutlineItemProps> = ({
   const containerStyle: React.CSSProperties = {
     ...defaultContainerStyle,
     ...styles?.container,
-    ...(isHovered && !isActive ? { backgroundColor: '#f8fafc', ...styles?.containerHover } : {}),
+    ...(isHovered && !isActive ? { backgroundColor: 'var(--lp-hover, #f8fafc)', ...styles?.containerHover } : {}),
     ...(isActive ? styles?.containerActive : {}),
   };
 
@@ -289,7 +289,7 @@ export const OutlineItem: React.FC<OutlineItemProps> = ({
             }}
             style={expandButtonStyle}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e5e7eb';
+              e.currentTarget.style.backgroundColor = 'var(--lp-hover, #e5e7eb)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';

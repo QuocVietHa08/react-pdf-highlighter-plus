@@ -1,4 +1,4 @@
-import { PDFDocumentProxy } from "pdfjs-dist";
+import { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import React, {
   CSSProperties,
   PointerEventHandler,
@@ -16,6 +16,8 @@ import {
   PdfHighlighterUtils,
 } from "../contexts/PdfHighlighterContext";
 import { scaledToViewport, viewportPositionToScaled } from "../lib/coordinates";
+import { createDarkModeColorMap, type RenderColorMap } from "../lib/dark-mode";
+import { applyContextRecolor } from "../lib/recolor-context";
 import getBoundingRect from "../lib/get-bounding-rect";
 import getClientRects from "../lib/get-client-rects";
 import groupHighlightsByPage from "../lib/group-highlights-by-page";
@@ -74,8 +76,8 @@ const DEFAULT_TEXT_SELECTION_COLOR = "rgba(153,193,218,255)";
  */
 export interface PdfHighlighterTheme {
   /**
-   * Theme mode - controls PDF page color inversion.
-   * In dark mode, PDF pages are inverted for comfortable reading.
+   * Theme mode. In dark mode, pages are recolored at draw time (hue-preserving,
+   * photos kept) using {@link PdfHighlighterTheme.darkModeColors}.
    * @default "light"
    */
   mode?: "light" | "dark";
@@ -106,9 +108,79 @@ export interface PdfHighlighterTheme {
    * - 0.85 = Softer gray ~#262626 (very comfortable)
    * - 0.8 = Medium gray ~#333333 (maximum softness)
    * @default 0.9
+   * @deprecated Dark mode now recolors at draw time (OKLab, hue-preserving,
+   * photos untouched) instead of a CSS `invert()` filter. This value is
+   * ignored. Use {@link PdfHighlighterTheme.darkModeColors} instead.
    */
   darkModeInvertIntensity?: number;
+
+  /**
+   * Dark-mode recolor palette. White paper maps to `background` and black
+   * text/line-art to `foreground`, recolored per-color at draw time (OKLab
+   * ramp) so hues are preserved and embedded photos keep their pixels.
+   * Only used when `mode === "dark"`.
+   * @default { background: "#141210", foreground: "#eae6e0" }
+   */
+  darkModeColors?: {
+    /** Replaces the white paper background. */
+    background: string;
+    /** Replaces black text and line art. */
+    foreground: string;
+  };
 }
+
+// Warm gray (red >= green >= blue): easier on the eyes than pure black, and
+// white paper maps onto it exactly. Matches lector's default dark palette.
+const DEFAULT_DARK_MODE_COLORS = {
+  background: "#141210",
+  foreground: "#eae6e0",
+};
+
+const RECOLOR_PATCHED = Symbol("pdfRecolorPatched");
+
+/**
+ * Patches a loaded PDF document so every page renders through the dark-mode
+ * recolor map (when one is active). PDF.js draws each page by calling
+ * `page.render({ canvasContext })`; we wrap that context with
+ * `applyContextRecolor` right before the real render and restore it after, so
+ * text/vector art is recolored at draw time while photos (drawImage) keep
+ * their pixels. The map is read live via `getMap()` so a palette/scheme toggle
+ * only needs a re-render, not a re-patch. Idempotent per document and page.
+ */
+const patchPageRenderRecolor = (
+  pdfDocument: PDFDocumentProxy,
+  getMap: () => RenderColorMap | null,
+) => {
+  const doc = pdfDocument as PDFDocumentProxy & { [RECOLOR_PATCHED]?: boolean };
+  if (doc[RECOLOR_PATCHED]) return;
+  doc[RECOLOR_PATCHED] = true;
+
+  const origGetPage = doc.getPage.bind(doc);
+  doc.getPage = (pageNumber: number) =>
+    origGetPage(pageNumber).then((page) => {
+      const p = page as PDFPageProxy & { [RECOLOR_PATCHED]?: boolean };
+      if (p[RECOLOR_PATCHED]) return p;
+      p[RECOLOR_PATCHED] = true;
+
+      const origRender = p.render.bind(p);
+      p.render = ((params: Parameters<typeof origRender>[0]) => {
+        const map = getMap();
+        const ctx = params?.canvasContext as
+          | CanvasRenderingContext2D
+          | undefined;
+        if (map && ctx) {
+          const cleanup = applyContextRecolor(ctx, map);
+          const task = origRender(params);
+          // Restore pristine context when the page settles (done OR cancelled),
+          // so pdf.js readbacks and the next render observe original colors.
+          task.promise.then(cleanup, cleanup);
+          return task;
+        }
+        return origRender(params);
+      }) as typeof p.render;
+      return p;
+    });
+};
 
 const defaultLightTheme: Required<PdfHighlighterTheme> = {
   mode: "light",
@@ -116,14 +188,16 @@ const defaultLightTheme: Required<PdfHighlighterTheme> = {
   scrollbarThumbColor: "#9f9f9f",
   scrollbarTrackColor: "#d1d1d1",
   darkModeInvertIntensity: 0.9,
+  darkModeColors: DEFAULT_DARK_MODE_COLORS,
 };
 
 const defaultDarkTheme: Required<PdfHighlighterTheme> = {
   mode: "dark",
-  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF page (~#1a1a1a) for contrast
+  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF page for contrast
   scrollbarThumbColor: "#6b6b6b",
   scrollbarTrackColor: "#2c2c2c",
   darkModeInvertIntensity: 0.9,
+  darkModeColors: DEFAULT_DARK_MODE_COLORS,
 };
 
 const findOrCreateHighlightLayer = (textLayer: HTMLElement) => {
@@ -183,6 +257,30 @@ export interface PdfHighlighterProps {
    * What scale to render the PDF at inside the viewer.
    */
   pdfScaleValue?: PdfScaleValue;
+
+  /**
+   * Fired when the user changes zoom by pinch / ctrl+wheel gesture, with the new
+   * numeric scale. Use it to keep an external zoom indicator / `pdfScaleValue`
+   * state in sync.
+   *
+   * @param scale - The new numeric scale (e.g. 1.25).
+   */
+  onZoomChange?(scale: number): void;
+
+  /**
+   * Page to scroll to once the document first finishes loading (1-indexed).
+   * Use for deep-linking (e.g. `?page=12`) or restoring a saved position.
+   * Applied only on initial load, not on subsequent re-renders.
+   */
+  initialPage?: number;
+
+  /**
+   * Callback fired whenever the current (most visible) page changes, including
+   * the initial page. Use to sync the page into a URL/localStorage.
+   *
+   * @param pageNumber - The new current page (1-indexed).
+   */
+  onPageChange?(pageNumber: number): void;
 
   /**
    * Callback triggered whenever a user finishes making a mouse selection or has
@@ -378,6 +476,9 @@ export const PdfHighlighter = ({
   highlights,
   onScrollAway,
   pdfScaleValue = DEFAULT_SCALE_VALUE,
+  onZoomChange,
+  initialPage,
+  onPageChange,
   onSelection: onSelectionFinished,
   onCreateGhostHighlight,
   onRemoveGhostHighlight,
@@ -397,12 +498,12 @@ export const PdfHighlighter = ({
   enableDrawingMode,
   onDrawingComplete,
   onDrawingCancel,
-  drawingStrokeColor = "#000000",
+  drawingStrokeColor: drawingStrokeColorProp,
   drawingStrokeWidth = 3,
   enableShapeMode,
   onShapeComplete,
   onShapeCancel,
-  shapeStrokeColor = "#000000",
+  shapeStrokeColor: shapeStrokeColorProp,
   shapeStrokeWidth = 2,
   theme: userTheme,
 }: PdfHighlighterProps) => {
@@ -412,6 +513,34 @@ export const PdfHighlighter = ({
     const defaults = mode === "light" ? defaultLightTheme : defaultDarkTheme;
     return { ...defaults, ...userTheme, mode };
   }, [userTheme]);
+
+  // Draw-time recolor map (lector-ported). Dark mode only; null = render
+  // document colors as-is. Photos are preserved (the wrapper skips drawImage),
+  // unlike PDF.js `pageColors`. String key drives effect re-runs on a real
+  // palette/mode change only.
+  const recolorKey =
+    resolvedTheme.mode === "dark"
+      ? `${resolvedTheme.darkModeColors.background}|${resolvedTheme.darkModeColors.foreground}`
+      : "light";
+  const recolorMap = useMemo(
+    () =>
+      resolvedTheme.mode === "dark"
+        ? createDarkModeColorMap(resolvedTheme.darkModeColors)
+        : null,
+    // recolorKey captures the palette + mode; map identity is stable per key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [recolorKey],
+  );
+  // The patched page.render reads the live map from this ref, so toggling the
+  // palette never needs re-patching — only a re-render (setDocument).
+  const recolorMapRef = useRef(recolorMap);
+  recolorMapRef.current = recolorMap;
+
+  // Default drawing/shape ink follows the scheme: white on a dark page, black on
+  // light, so strokes stay visible. An explicit prop always wins.
+  const defaultStrokeColor = resolvedTheme.mode === "dark" ? "#ffffff" : "#000000";
+  const drawingStrokeColor = drawingStrokeColorProp ?? defaultStrokeColor;
+  const shapeStrokeColor = shapeStrokeColorProp ?? defaultStrokeColor;
 
   // State
   const [tip, setTip] = useState<Tip | null>(null);
@@ -448,6 +577,13 @@ export const PdfHighlighter = ({
   );
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null);
   const viewerRef = useRef<InstanceType<typeof PDFViewer> | null>(null);
+  // Last document the viewer ran setDocument for (to tell first load from a
+  // toggle) and the last (document + recolor) key actually rendered. The key
+  // dedupes StrictMode's double-invoke: without it, two overlapping async
+  // setDocument calls make pdf.js append the page list twice (a 12-page doc
+  // shows 24 pages).
+  const prevDocRef = useRef<PDFDocumentProxy | null>(null);
+  const lastRenderKeyRef = useRef<string | null>(null);
 
   highlightsRef.current = highlights;
   childrenRef.current = children;
@@ -455,6 +591,15 @@ export const PdfHighlighter = ({
   // Initialise PDF Viewer
   useLayoutEffect(() => {
     if (!containerNodeRef.current) return;
+
+    // Dedupe StrictMode's double-invoke (and any identical re-run): the same
+    // document + recolor key must not call setDocument twice, or pdf.js renders
+    // the page list twice. recolorKey changes on a real palette/scheme toggle.
+    const renderKey = `${(pdfDocument as { fingerprints?: unknown }).fingerprints ?? pdfDocument.numPages}::${recolorKey}`;
+    if (lastRenderKeyRef.current === renderKey) {
+      console.log("[PdfHighlighter] skip duplicate setDocument", renderKey);
+      return;
+    }
 
     findControllerRef.current =
       findControllerRef.current ||
@@ -474,11 +619,74 @@ export const PdfHighlighter = ({
         linkService: linkServiceRef.current,
       });
 
+    // Draw-time dark-mode recolor: patch the document's page.render to wrap the
+    // canvas context with the live map (idempotent). Toggling the palette only
+    // re-runs this effect (recolorKey dep) → setDocument re-renders the pages →
+    // the patched render picks up the new map from recolorMapRef.
+    patchPageRenderRecolor(pdfDocument, () => recolorMapRef.current);
+
+    // Toggle vs first load: same document object means this re-run is a
+    // palette/scheme toggle, where setDocument would otherwise reset both the
+    // scroll position (resetView -> top) and the zoom (handleScaleValue
+    // re-applies the pdfScaleValue prop on pagesinit). Capture the live scroll
+    // (as a fraction of the scrollable range, so it survives any height change)
+    // and the live zoom, then restore both once the rebuilt pages re-init.
+    const isToggle = prevDocRef.current === pdfDocument;
+    prevDocRef.current = pdfDocument;
+
+    let scrollFraction = 0;
+    let savedScaleValue: string | number | undefined;
+    if (isToggle && viewerRef.current.container) {
+      const c = viewerRef.current.container;
+      const range = c.scrollHeight - c.clientHeight;
+      scrollFraction = range > 0 ? c.scrollTop / range : 0;
+      // currentScaleValue is "auto"/"page-width"/... or a numeric zoom; keep
+      // whichever it is so a responsive scale stays responsive and an explicit
+      // zoom stays exact. Fall back to the computed numeric scale.
+      savedScaleValue =
+        viewerRef.current.currentScaleValue ?? viewerRef.current.currentScale;
+    }
+
+    console.log("[PdfHighlighter] recolor active?", {
+      mode: resolvedTheme.mode,
+      hasMap: !!recolorMapRef.current,
+      palette: resolvedTheme.darkModeColors,
+      isToggle,
+      scrollFraction,
+      savedScaleValue,
+    });
+
+    if (isToggle) {
+      const restoreView = () => {
+        eventBusRef.current.off("pagesinit", restoreView);
+        // Restore zoom first (this fires after handleScaleValue's pagesinit
+        // handler, so it wins), then the scroll fraction in an rAF once the
+        // re-scaled layout has settled and the scrollable range is final.
+        if (savedScaleValue != null && viewerRef.current) {
+          viewerRef.current.currentScaleValue = String(savedScaleValue);
+        }
+        requestAnimationFrame(() => {
+          const c = viewerRef.current?.container;
+          if (!c) return;
+          const range = c.scrollHeight - c.clientHeight;
+          c.scrollTop = scrollFraction * Math.max(0, range);
+          console.log("[PdfHighlighter] restored view after toggle", {
+            scrollFraction,
+            scrollTop: c.scrollTop,
+            scaleValue: viewerRef.current?.currentScaleValue,
+          });
+        });
+      };
+      eventBusRef.current.on("pagesinit", restoreView);
+    }
+
+    lastRenderKeyRef.current = renderKey;
     viewerRef.current.setDocument(pdfDocument);
     linkServiceRef.current.setDocument(pdfDocument);
     linkServiceRef.current.setViewer(viewerRef.current);
     setIsViewerReady(true);
-  }, [pdfDocument]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfDocument, recolorKey]);
 
   // Initialise viewer event listeners
   useLayoutEffect(() => {
@@ -512,6 +720,268 @@ export const PdfHighlighter = ({
       }
     };
   }, [selectionTip, highlights, onSelectionFinished]);
+
+  // Page tracking + deep-link / initial page. Registered after the listeners
+  // effect so this `pagesinit` handler runs after handleScaleValue (scale set
+  // before we scroll to the initial page). Refs keep the listeners stable so we
+  // never resubscribe on prop changes.
+  const onPageChangeRef = useRef(onPageChange);
+  onPageChangeRef.current = onPageChange;
+  const initialPageRef = useRef(initialPage);
+  initialPageRef.current = initialPage;
+  const initialPageAppliedRef = useRef(false);
+  // While the initial page is being homed in, the viewer fires spurious
+  // pagechanging events (1, target, 1, 2…) as scale/resize relayout settles.
+  // This holds the target during that window so we (a) suppress URL writes that
+  // would clobber the deep link and (b) re-assert the target until it sticks.
+  const pendingInitialPageRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const eventBus = eventBusRef.current;
+
+    const handlePageChanging = (evt: { pageNumber: number }) => {
+      // Don't let the load-time bounce overwrite the deep-linked page.
+      if (pendingInitialPageRef.current != null) return;
+      onPageChangeRef.current?.(evt.pageNumber);
+    };
+    eventBus.on("pagechanging", handlePageChanging);
+
+    // First load only: home in on the requested initial page once pages exist.
+    // Guarded so a dark-mode toggle (which also fires pagesinit) never re-jumps.
+    const handlePagesInit = () => {
+      if (initialPageAppliedRef.current) return;
+      initialPageAppliedRef.current = true;
+      const page = initialPageRef.current;
+      console.log("[PdfHighlighter] pagesinit, initialPage =", page);
+      if (!page || page <= 1) return;
+
+      pendingInitialPageRef.current = page;
+      let tries = 0;
+      let matches = 0;
+
+      // Poll: scale/resize relayout keeps yanking the view back to the top for
+      // a few hundred ms after load. Re-assert the target until the viewer
+      // reports it as the current page for a few consecutive ticks, then
+      // release and write the URL once. Bounded so we never spin forever.
+      const tick = () => {
+        const viewer = viewerRef.current;
+        if (!viewer || pendingInitialPageRef.current == null) return;
+        tries++;
+
+        if (viewer.currentPageNumber === page) {
+          matches++;
+        } else {
+          matches = 0;
+          try {
+            viewer.scrollPageIntoView({ pageNumber: page });
+          } catch (e) {
+            console.log("[PdfHighlighter] scrollPageIntoView threw", e);
+          }
+        }
+
+        if (matches >= 3) {
+          pendingInitialPageRef.current = null;
+          onPageChangeRef.current?.(page); // ensure URL = the resolved page
+          console.log("[PdfHighlighter] initialPage settled at", page);
+          return;
+        }
+        if (tries > 40) {
+          pendingInitialPageRef.current = null;
+          console.log("[PdfHighlighter] initialPage gave up at", page);
+          return;
+        }
+        setTimeout(tick, 50);
+      };
+      setTimeout(tick, 0);
+    };
+    eventBus.on("pagesinit", handlePagesInit);
+
+    return () => {
+      eventBus.off("pagechanging", handlePageChanging);
+      eventBus.off("pagesinit", handlePagesInit);
+      pendingInitialPageRef.current = null;
+    };
+  }, []);
+
+  // Pinch-to-zoom: ctrl/⌘ + wheel (trackpad pinch) and two-finger touch. For
+  // smoothness we DON'T re-rasterise per frame (that's janky). During the
+  // gesture we only apply a GPU-composited CSS `transform: scale()` to the
+  // .pdfViewer — buttery, anchored to the cursor / pinch centre via
+  // transform-origin. When the gesture settles we commit ONCE: set the real
+  // PDF.js scale (one crisp re-raster) and fix the scroll so the anchor stays
+  // put. This is the lector approach adapted to PDFViewer.
+  const onZoomChangeRef = useRef(onZoomChange);
+  onZoomChangeRef.current = onZoomChange;
+
+  useEffect(() => {
+    const container = containerNodeRef.current;
+    if (!container || !isViewerReady) return;
+
+    const MIN_SCALE = 0.25;
+    const MAX_SCALE = 10;
+    const COMMIT_DELAY = 140; // ms of no wheel events before committing
+
+    // Live gesture state. originX/Y are the anchor in CONTENT coords (fixed for
+    // the whole gesture); anchorX/Y are the same point relative to the container.
+    const g = {
+      active: false,
+      startScale: 1,
+      startScrollLeft: 0,
+      startScrollTop: 0,
+      anchorX: 0,
+      anchorY: 0,
+      originX: 0,
+      originY: 0,
+      k: 1,
+      raf: 0,
+      commitTimer: 0 as number | ReturnType<typeof setTimeout>,
+    };
+
+    const pdfViewerEl = () =>
+      container.querySelector(".pdfViewer") as HTMLElement | null;
+
+    const clampK = (k: number) =>
+      Math.min(
+        MAX_SCALE / g.startScale,
+        Math.max(MIN_SCALE / g.startScale, k),
+      );
+
+    const begin = (anchorX: number, anchorY: number) => {
+      const viewer = viewerRef.current;
+      const el = pdfViewerEl();
+      if (!viewer || !el) return false;
+      g.active = true;
+      g.startScale = viewer.currentScale;
+      g.startScrollLeft = container.scrollLeft;
+      g.startScrollTop = container.scrollTop;
+      g.anchorX = anchorX;
+      g.anchorY = anchorY;
+      g.originX = container.scrollLeft + anchorX;
+      g.originY = container.scrollTop + anchorY;
+      g.k = 1;
+      // Scale about the anchor point (in the element's own coord space) so it
+      // stays under the fingers; no layout/scroll change during the preview.
+      el.style.transformOrigin = `${g.originX}px ${g.originY}px`;
+      el.style.willChange = "transform";
+      return true;
+    };
+
+    const previewRaf = () => {
+      g.raf = 0;
+      const el = pdfViewerEl();
+      if (el) el.style.transform = `scale(${g.k})`;
+    };
+    const preview = () => {
+      if (!g.raf) g.raf = requestAnimationFrame(previewRaf);
+    };
+
+    const commit = () => {
+      if (!g.active) return;
+      g.active = false;
+      if (g.raf) {
+        cancelAnimationFrame(g.raf);
+        g.raf = 0;
+      }
+      const viewer = viewerRef.current;
+      const el = pdfViewerEl();
+      if (el) {
+        el.style.transform = "";
+        el.style.transformOrigin = "";
+        el.style.willChange = "";
+      }
+      if (!viewer) return;
+      const finalScale = Math.min(
+        MAX_SCALE,
+        Math.max(MIN_SCALE, g.startScale * g.k),
+      );
+      const ratio = finalScale / g.startScale;
+      // Re-raster once at the new scale, then anchor the scroll so the content
+      // point under the gesture stays in place.
+      viewer.currentScaleValue = String(finalScale);
+      container.scrollLeft = g.originX * ratio - g.anchorX;
+      container.scrollTop = g.originY * ratio - g.anchorY;
+      onZoomChangeRef.current?.(finalScale);
+      console.log("[PdfHighlighter] pinch commit", {
+        from: g.startScale,
+        to: finalScale,
+      });
+    };
+
+    const scheduleCommit = () => {
+      clearTimeout(g.commitTimer);
+      g.commitTimer = setTimeout(commit, COMMIT_DELAY);
+    };
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return; // pinch / ctrl-scroll only
+      e.preventDefault();
+      const rect = container.getBoundingClientRect();
+      const ax = e.clientX - rect.left;
+      const ay = e.clientY - rect.top;
+      if (!g.active && !begin(ax, ay)) return;
+      // Exponential: each notch is a constant ratio. Up = zoom in.
+      g.k = clampK(g.k * Math.exp(-e.deltaY * 0.01));
+      preview();
+      scheduleCommit(); // wheel has no end event — commit after it stops
+    };
+    container.addEventListener("wheel", handleWheel, { passive: false });
+
+    // Two-finger touch pinch via pointer events.
+    const pointers = new Map<number, PointerEvent>();
+    let startDist = 0;
+    const spread = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.pointerType === "touch") pointers.set(e.pointerId, e);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, e);
+      if (pointers.size !== 2) return;
+      e.preventDefault();
+      const d = spread();
+      const [a, b] = [...pointers.values()];
+      const rect = container.getBoundingClientRect();
+      const cx = (a.clientX + b.clientX) / 2 - rect.left;
+      const cy = (a.clientY + b.clientY) / 2 - rect.top;
+      if (!g.active) {
+        startDist = d;
+        if (!begin(cx, cy)) return;
+        return;
+      }
+      g.k = clampK(d / startDist);
+      preview();
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2 && g.active) {
+        startDist = 0;
+        commit(); // pinch ended — commit immediately
+      }
+    };
+    container.addEventListener("pointerdown", onPointerDown);
+    container.addEventListener("pointermove", onPointerMove, { passive: false });
+    container.addEventListener("pointerup", onPointerUp);
+    container.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("pointerdown", onPointerDown);
+      container.removeEventListener("pointermove", onPointerMove);
+      container.removeEventListener("pointerup", onPointerUp);
+      container.removeEventListener("pointercancel", onPointerUp);
+      clearTimeout(g.commitTimer);
+      if (g.raf) cancelAnimationFrame(g.raf);
+      const el = pdfViewerEl();
+      if (el) {
+        el.style.transform = "";
+        el.style.transformOrigin = "";
+        el.style.willChange = "";
+      }
+    };
+  }, [isViewerReady]);
 
   // Event listeners
   const handleScroll = () => {
@@ -1099,17 +1569,6 @@ export const PdfHighlighter = ({
           .PdfHighlighter::-webkit-scrollbar-track-piece {
             background-color: ${resolvedTheme.scrollbarTrackColor};
           }
-          ${resolvedTheme.mode === 'dark' ? `
-          .PdfHighlighter--dark .page {
-            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(1.05);
-          }
-          .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
-            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(0.95);
-          }
-          .PdfHighlighter--dark .PdfHighlighter__note-layer {
-            filter: invert(${resolvedTheme.darkModeInvertIntensity}) hue-rotate(180deg) brightness(0.95);
-          }
-          ` : ''}
         `}
         </style>
         {isViewerReady && (

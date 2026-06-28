@@ -1,10 +1,11 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   ChevronDown,
   ChevronUp,
   Download,
   FileText,
   Minimize2,
+  Link2,
   Minus,
   Moon,
   PanelLeftClose,
@@ -35,16 +36,21 @@ interface HeaderProps {
   darkMode: boolean;
   onToggleDarkMode: () => void;
   onLoadLocalPdf?: (file: File) => void;
+  onLoadUrl?: (url: string) => void;
   searchQuery: string;
   searchCurrent: number;
   searchTotal: number;
   isSearchPending: boolean;
+  searchCaseSensitive: boolean;
+  searchWholeWord: boolean;
   noteCompactMode: boolean;
   onSearchQueryChange: (query: string) => void;
   onSearchSubmit: () => void;
   onSearchNext: () => void;
   onSearchPrevious: () => void;
   onSearchClear: () => void;
+  onToggleSearchCaseSensitive: () => void;
+  onToggleSearchWholeWord: () => void;
   onToggleNoteCompactMode: () => void;
   onExtractSentences: () => void;
   isExtractingSentences: boolean;
@@ -63,16 +69,21 @@ export function Header({
   darkMode,
   onToggleDarkMode,
   onLoadLocalPdf,
+  onLoadUrl,
   searchQuery,
   searchCurrent,
   searchTotal,
   isSearchPending,
+  searchCaseSensitive,
+  searchWholeWord,
   noteCompactMode,
   onSearchQueryChange,
   onSearchSubmit,
   onSearchNext,
   onSearchPrevious,
   onSearchClear,
+  onToggleSearchCaseSensitive,
+  onToggleSearchWholeWord,
   onToggleNoteCompactMode,
   onExtractSentences,
   isExtractingSentences,
@@ -81,14 +92,54 @@ export function Header({
   onSentenceExtractionPagesChange,
 }: HeaderProps) {
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [openPdfModal, setOpenPdfModal] = React.useState(false);
+  const [linkInput, setLinkInput] = React.useState("");
+
+  const submitLink = () => {
+    const link = linkInput.trim();
+    if (!link || !onLoadUrl) return;
+    onLoadUrl(link);
+    setLinkInput("");
+    setOpenPdfModal(false);
+  };
   const displayZoom = pdfScaleValue
     ? `${Math.round(pdfScaleValue * 100)}%`
     : "Auto";
+
+  // Cmd/Ctrl+F focuses the PDF search box (overrides the browser find).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // In the search box: Enter = next match (or run search if not yet searched),
+  // Shift+Enter = previous, Escape = clear.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (e.shiftKey) onSearchPrevious();
+      else if (searchTotal > 0) onSearchNext();
+      else onSearchSubmit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onSearchClear();
+      searchInputRef.current?.blur();
+    }
+  };
 
   const handlePdfFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && onLoadLocalPdf) {
       onLoadLocalPdf(file);
+      setOpenPdfModal(false);
     }
     // Reset so same file can be selected again
     event.target.value = "";
@@ -96,7 +147,7 @@ export function Header({
 
   return (
     <TooltipProvider>
-      <header className="flex h-14 items-center justify-between border-b bg-background px-4">
+      <header className="flex h-14 items-center justify-between gap-2 overflow-x-auto border-b bg-background px-4">
         {/* Left section - Logo and sidebar toggle */}
         <div className="flex items-center gap-3">
           <Tooltip>
@@ -121,7 +172,7 @@ export function Header({
 
           <Separator orientation="vertical" className="h-6" />
 
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
               <span className="text-sm font-bold text-primary-foreground">
                 PDF
@@ -132,7 +183,7 @@ export function Header({
         </div>
 
         {/* Right section - Zoom controls and export */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
           {/* Search controls */}
           <form
             className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
@@ -143,11 +194,43 @@ export function Header({
           >
             <Search className="ml-2 h-4 w-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Search PDF"
               className="h-7 w-44 border-0 bg-transparent px-2 py-1 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={searchCaseSensitive ? "secondary" : "ghost"}
+                  size="icon"
+                  onClick={onToggleSearchCaseSensitive}
+                  className="h-7 w-7 text-xs font-semibold"
+                  aria-pressed={searchCaseSensitive}
+                >
+                  Aa
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Match case</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant={searchWholeWord ? "secondary" : "ghost"}
+                  size="icon"
+                  onClick={onToggleSearchWholeWord}
+                  className="h-7 w-7 text-xs font-semibold"
+                  aria-pressed={searchWholeWord}
+                >
+                  W
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Whole word</TooltipContent>
+            </Tooltip>
             <span className="min-w-[54px] text-center text-xs text-muted-foreground">
               {isSearchPending
                 ? "..."
@@ -322,13 +405,13 @@ export function Header({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => pdfInputRef.current?.click()}
+                onClick={() => setOpenPdfModal(true)}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 Open PDF
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Open a local PDF file</TooltipContent>
+            <TooltipContent>Open a local file or a URL</TooltipContent>
           </Tooltip>
 
           {/* Export button */}
@@ -352,6 +435,83 @@ export function Header({
           onChange={handlePdfFileChange}
         />
       </header>
+
+      {/* Open PDF modal: local file or URL */}
+      {openPdfModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setOpenPdfModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border bg-background p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold">Open PDF</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setOpenPdfModal(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Option 1: upload local file */}
+            <button
+              type="button"
+              onClick={() => pdfInputRef.current?.click()}
+              className="flex w-full items-center gap-3 rounded-md border border-dashed p-4 text-left transition-colors hover:bg-muted/50"
+            >
+              <Upload className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <div className="text-sm font-medium">Upload a local PDF</div>
+                <div className="text-xs text-muted-foreground">
+                  Choose a .pdf file from your device
+                </div>
+              </div>
+            </button>
+
+            <div className="my-4 flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="h-px flex-1 bg-border" />
+              or
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* Option 2: paste a URL */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Link2 className="h-4 w-4 text-muted-foreground" />
+                Load from a URL
+              </div>
+              <Input
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitLink();
+                  }
+                }}
+                placeholder="https://… (Firebase Storage, etc.)"
+                autoFocus
+              />
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={submitLink}
+                disabled={!linkInput.trim()}
+              >
+                Load PDF
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                The server must allow CORS for cross-origin URLs.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </TooltipProvider>
   );
 }

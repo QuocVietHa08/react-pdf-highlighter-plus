@@ -110,6 +110,17 @@ const defaultTheme: LeftPanelTheme = {
   hoverBackgroundColor: '#f9fafb',
 };
 
+/** Dark-mode preset, used when `mode="dark"` (warm grays matching the
+ *  PdfHighlighter dark page palette). Any `theme` prop fields override it. */
+const defaultDarkTheme: LeftPanelTheme = {
+  backgroundColor: '#1f1d1b',
+  borderColor: '#3a3733',
+  accentColor: '#7aa2f7',
+  textColor: '#eae6e0',
+  mutedTextColor: '#a8a29a',
+  hoverBackgroundColor: '#2a2724',
+};
+
 export interface LeftPanelProps {
   /** PDF document from PdfLoader */
   pdfDocument: PDFDocumentProxy;
@@ -152,7 +163,10 @@ export interface LeftPanelProps {
   thumbnailWidth?: number;
   /** Children for custom content */
   children?: React.ReactNode;
-  /** Theme customization */
+  /** Color scheme. "dark" swaps in a dark default palette; `theme` overrides
+   *  individual colors on top of whichever preset is chosen. @default "light" */
+  mode?: "light" | "dark";
+  /** Theme customization (merged over the mode preset) */
   theme?: LeftPanelTheme;
   /** Show page count in footer */
   showFooter?: boolean;
@@ -202,6 +216,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   onPageSelect,
   thumbnailWidth = 180,
   children,
+  mode = "light",
   theme: userTheme,
   showFooter = true,
   showToggleButton = true,
@@ -216,8 +231,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
   outlineItemStyles,
   outlineItemClassNames,
 }) => {
-  // Merge user theme with defaults
-  const theme = useMemo(() => ({ ...defaultTheme, ...userTheme }), [userTheme]);
+  // Merge user theme over the mode preset (dark vs light defaults).
+  const theme = useMemo(
+    () => ({
+      ...(mode === "dark" ? defaultDarkTheme : defaultTheme),
+      ...userTheme,
+    }),
+    [mode, userTheme],
+  );
   // Internal state for uncontrolled mode
   const [internalIsOpen, setInternalIsOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<LeftPanelTab>(defaultTab);

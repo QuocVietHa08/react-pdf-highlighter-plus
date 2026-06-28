@@ -92,7 +92,7 @@ export const ThumbnailPanel: React.FC<ThumbnailPanelProps> = ({
           padding: '48px 16px',
         }}
       >
-        <p style={{ fontSize: 13, color: '#9ca3af' }}>No pages to display</p>
+        <p style={{ fontSize: 13, color: 'var(--lp-muted, #9ca3af)' }}>No pages to display</p>
       </div>
     );
   }

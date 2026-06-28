@@ -123,24 +123,47 @@
   cursor: crosshair;
 }
 
-/* Dark mode - softer inversion for comfortable reading
-   Uses 0.9 intensity by default for a dark gray (~#1a1a1a) instead of pure black.
-   The brightness adjustment helps maintain readability.
-   Note: These are fallback values - actual intensity is controlled via inline styles
-   when darkModeInvertIntensity is customized in the theme prop. */
-.PdfHighlighter--dark .page {
-  filter: invert(0.9) hue-rotate(180deg) brightness(1.05);
+/* Dark mode recolors each page at draw time (OKLab map from theme.darkModeColors,
+   wired in PdfHighlighter). No CSS invert filter: inverting distorted photos and
+   colored text. Highlight/note/config layers render normally — they sit on
+   already-recolored pages, so no counter-inversion is needed. */
+
+/* Dark mode: give every highlight a persistent red border so they stay legible
+   against the recolored dark page (light mode keeps the ring on scrolled-to
+   only). :not(--scrolledTo) so the active highlight keeps its stronger double
+   ring (equal-specificity rules would otherwise clobber it by load order). */
+.PdfHighlighter--dark
+  .TextHighlight:not(.TextHighlight--scrolledTo)
+  .TextHighlight__part,
+.PdfHighlighter--dark
+  .AreaHighlight:not(.AreaHighlight--scrolledTo)
+  .AreaHighlight__part {
+  box-shadow: 0 0 0 1px #ff4141;
 }
 
-/* Double-invert highlights to preserve their original colors */
-.PdfHighlighter--dark .PdfHighlighter__highlight-layer {
-  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+/* The text/highlight layer blends with the page canvas via `multiply`
+   (pdf_viewer.css). Over the dark recolored page that crushes highlights to
+   near-black, and `screen` washes them out (recolored text is already light, so
+   light highlight + light text = no contrast). Instead: normal blend, and make
+   the highlight FILLS translucent via --hl-fill-alpha (TextHighlight /
+   AreaHighlight read it through color-mix). Translucency comes from the fill
+   color, not element opacity, so the red border ring stays crisp. The light text
+   then reads on a muted colored tint — a proper dark-mode highlight. */
+.PdfHighlighter--dark {
+  --hl-fill-alpha: 42%;
+}
+.PdfHighlighter--dark .textLayer {
+  mix-blend-mode: normal;
 }
 
-.PdfHighlighter--dark .PdfHighlighter__note-layer {
-  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+/* Live text selection: the default opaque blue + multiply/screen makes selected
+   text unreadable on dark. Force a translucent selection with normal blend so
+   the light text shows through the highlight. */
+.PdfHighlighter--dark .textLayer ::selection {
+  background: rgba(120, 162, 247, 0.4) !important;
+  mix-blend-mode: normal;
 }
-
-.PdfHighlighter--dark .PdfHighlighter__config-layer {
-  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
+.PdfHighlighter--dark .MouseSelection {
+  mix-blend-mode: normal;
+  opacity: 0.4;
 }

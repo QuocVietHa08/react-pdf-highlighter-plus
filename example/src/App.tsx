@@ -96,8 +96,15 @@ const resetHash = () => {
   document.location.hash = "";
 };
 
+// Test any PDF (e.g. a Firebase Storage download URL) by appending
+// ?pdf=<encoded-url> to the address bar. Falls back to the sample.
+const initialUrl = (() => {
+  const param = new URLSearchParams(window.location.search).get("pdf");
+  return param || PRIMARY_PDF_URL;
+})();
+
 const App = () => {
-  const [url, setUrl] = useState<string | Uint8Array>(PRIMARY_PDF_URL);
+  const [url, setUrl] = useState<string | Uint8Array>(initialUrl);
   const [highlights, setHighlights] = useState<Array<CommentedHighlight>>([]);
   const testHighlightsRef = useRef<TestHighlights>({});
   const currentPdfIndexRef = useRef(0);
@@ -127,7 +134,54 @@ const App = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState<boolean>(true);
   // Dark mode state
   const [darkMode, setDarkMode] = useState<boolean>(false);
+
+  // Responsive: below 768px the side panels become overlay drawers instead of
+  // taking layout width, so the PDF gets the full screen.
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  // Collapse both panels when entering mobile so the PDF isn't covered.
+  useEffect(() => {
+    if (isMobile) {
+      setSidebarOpen(false);
+      setLeftPanelOpen(false);
+    }
+  }, [isMobile]);
+
+  // On mobile only one drawer at a time (both anchor left); opening one closes
+  // the other.
+  const toggleSidebar = () =>
+    setSidebarOpen((open) => {
+      const next = !open;
+      if (next && isMobile) setLeftPanelOpen(false);
+      return next;
+    });
+  const handleLeftPanelOpenChange = (open: boolean) => {
+    setLeftPanelOpen(open);
+    if (open && isMobile) setSidebarOpen(false);
+  };
+
+  // Default the drawing/shape ink to white in dark mode and black in light, so
+  // strokes are visible against the recolored page. Only flips when the color is
+  // still at the opposite default — a user-picked color (red, blue, …) is kept.
+  useEffect(() => {
+    const flip = (prev: string) =>
+      prev === "#000000" || prev === "#ffffff"
+        ? darkMode
+          ? "#ffffff"
+          : "#000000"
+        : prev;
+    setDrawingStrokeColor(flip);
+    setShapeStrokeColor(flip);
+  }, [darkMode]);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  const [searchWholeWord, setSearchWholeWord] = useState(false);
   const [searchStatus, setSearchStatus] = useState<SearchStatus>({
     current: 0,
     total: 0,
@@ -217,6 +271,17 @@ const App = () => {
     currentPdfIndexRef.current = (currentPdfIndexRef.current + 1) % urls.length;
     setUrl(urls[currentPdfIndexRef.current]);
     setHighlights(testHighlightsRef.current[urls[currentPdfIndexRef.current]] ?? []);
+  };
+
+  const handleLoadUrl = (link: string) => {
+    console.log(`Loading PDF from URL: ${link}`);
+    setUrl(link);
+    setHighlights([]); // Clear highlights for the new document
+    // Reflect the source in the address bar so it's shareable / reloadable.
+    const next = new URL(window.location.href);
+    next.searchParams.set("pdf", link);
+    next.searchParams.delete("page");
+    window.history.replaceState(null, "", next);
   };
 
   const handleLoadLocalPdf = (file: File) => {
@@ -465,18 +530,32 @@ const App = () => {
     setPdfScaleValue(Math.max(currentScale - 0.25, 0.5));
   };
 
-  const handleSearchSubmit = () => {
-    const query = searchQuery.trim();
-
-    if (!query) {
+  const runSearch = (
+    query: string,
+    caseSensitive = searchCaseSensitive,
+    entireWord = searchWholeWord,
+  ) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
       highlighterUtilsRef.current?.clearSearch();
       setSearchStatus({ current: 0, total: 0, isPending: false });
       return;
     }
-
     setSearchStatus((previous) => ({ ...previous, isPending: true }));
-    highlighterUtilsRef.current?.search(query, { highlightAll: true });
+    highlighterUtilsRef.current?.search(trimmed, {
+      highlightAll: true,
+      caseSensitive,
+      entireWord,
+    });
   };
+
+  const handleSearchSubmit = () => runSearch(searchQuery);
+
+  // Re-run the active search when an option toggles, so results update live.
+  useEffect(() => {
+    if (searchQuery.trim()) runSearch(searchQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchCaseSensitive, searchWholeWord]);
 
   const handleSearchClear = () => {
     setSearchQuery("");
@@ -594,20 +673,25 @@ const App = () => {
         onZoomOut={handleZoomOut}
         onExportPdf={handleExportPdf}
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+        onToggleSidebar={toggleSidebar}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
         onLoadLocalPdf={handleLoadLocalPdf}
+        onLoadUrl={handleLoadUrl}
         searchQuery={searchQuery}
         searchCurrent={searchStatus.current}
         searchTotal={searchStatus.total}
         isSearchPending={searchStatus.isPending}
         noteCompactMode={noteCompactMode}
+        searchCaseSensitive={searchCaseSensitive}
+        searchWholeWord={searchWholeWord}
         onSearchQueryChange={setSearchQuery}
         onSearchSubmit={handleSearchSubmit}
         onSearchNext={() => highlighterUtilsRef.current?.findNext()}
         onSearchPrevious={() => highlighterUtilsRef.current?.findPrevious()}
         onSearchClear={handleSearchClear}
+        onToggleSearchCaseSensitive={() => setSearchCaseSensitive((v) => !v)}
+        onToggleSearchWholeWord={() => setSearchWholeWord((v) => !v)}
         onToggleNoteCompactMode={() => setNoteCompactMode(!noteCompactMode)}
         onExtractSentences={handleExtractSentences}
         isExtractingSentences={isExtractingSentences}
@@ -617,17 +701,38 @@ const App = () => {
       />
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar
-          highlights={highlights}
-          resetHighlights={resetHighlights}
-          toggleDocument={toggleDocument}
-          scrolledToHighlightId={scrolledToHighlightId}
-          onEditHighlight={handleEditFromSidebar}
-          onDeleteHighlight={deleteHighlight}
-          isOpen={sidebarOpen}
-        />
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* Backdrop for mobile drawers */}
+        {isMobile && (sidebarOpen || leftPanelOpen) && (
+          <div
+            className="absolute inset-0 z-30 bg-black/40"
+            onClick={() => {
+              setSidebarOpen(false);
+              setLeftPanelOpen(false);
+            }}
+          />
+        )}
+
+        {/* Sidebar (overlay drawer on mobile) */}
+        <div
+          className={
+            isMobile
+              ? `absolute inset-y-0 left-0 z-40 transition-transform duration-300 ${
+                  sidebarOpen ? "translate-x-0" : "-translate-x-full"
+                }`
+              : "contents"
+          }
+        >
+          <Sidebar
+            highlights={highlights}
+            resetHighlights={resetHighlights}
+            toggleDocument={toggleDocument}
+            scrolledToHighlightId={scrolledToHighlightId}
+            onEditHighlight={handleEditFromSidebar}
+            onDeleteHighlight={deleteHighlight}
+            isOpen={isMobile ? true : sidebarOpen}
+          />
+        </div>
 
         {/* PDF Viewer with Left Panel */}
         <div className="relative flex-1 overflow-hidden flex h-full">
@@ -637,18 +742,25 @@ const App = () => {
 
               return (
                 <div className="flex h-full w-full">
-                {/* Left Panel - Outline & Thumbnails */}
+                {/* Left Panel - Outline & Thumbnails (overlay drawer on mobile) */}
+                <div
+                  className={
+                    isMobile ? "absolute inset-y-0 left-0 z-40 h-full" : "contents"
+                  }
+                >
                 <LeftPanel
                   pdfDocument={pdfDocument}
+                  mode={darkMode ? "dark" : "light"}
                   viewer={highlighterUtilsRef.current?.getViewer()}
                   linkService={highlighterUtilsRef.current?.getLinkService()}
                   eventBus={highlighterUtilsRef.current?.getEventBus()}
                   goToPage={highlighterUtilsRef.current?.goToPage}
                   isOpen={leftPanelOpen}
-                  onOpenChange={setLeftPanelOpen}
+                  onOpenChange={handleLeftPanelOpenChange}
                   width={280}
                   defaultTab="outline"
                 />
+                </div>
 
                 {/* PDF Highlighter */}
                 <div className="flex-1 relative overflow-hidden">
@@ -658,6 +770,17 @@ const App = () => {
                     pdfDocument={pdfDocument}
                     theme={{ mode: darkMode ? "dark" : "light" }}
                     onScrollAway={resetHash}
+                    initialPage={
+                      Number(
+                        new URLSearchParams(window.location.search).get("page"),
+                      ) || undefined
+                    }
+                    onPageChange={(page) => {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("page", String(page));
+                      window.history.replaceState(null, "", url);
+                      console.log("[example] page ->", page, url.search);
+                    }}
                     utilsRef={(_pdfHighlighterUtils) => {
                       highlighterUtilsRef.current = _pdfHighlighterUtils;
                       // Only force update ONCE to prevent infinite re-render loop
@@ -667,6 +790,9 @@ const App = () => {
                       }
                     }}
                     pdfScaleValue={pdfScaleValue}
+                    onZoomChange={(scale) =>
+                      setPdfScaleValue(Math.round(scale * 100) / 100)
+                    }
                     textSelectionColor={highlightPen ? "rgba(255, 226, 143, 1)" : undefined}
                     onSelection={highlightPen ? (selection) => {
                       addHighlight(selection.makeGhostHighlight(), "");

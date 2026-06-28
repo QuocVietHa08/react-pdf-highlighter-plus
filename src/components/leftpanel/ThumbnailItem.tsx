@@ -80,7 +80,7 @@ export const ThumbnailItem = React.memo<ThumbnailItemProps>(({
     position: 'relative',
     width: '85%',
     aspectRatio: '8.5 / 11', // Standard page aspect ratio
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--lp-bg, #ffffff)',
     borderRadius: '4px',
     overflow: 'hidden',
     boxShadow: isActive
@@ -95,7 +95,7 @@ export const ThumbnailItem = React.memo<ThumbnailItemProps>(({
     marginTop: '6px',
     fontSize: '11px',
     fontWeight: 500,
-    color: isActive ? '#3b82f6' : '#6b7280',
+    color: isActive ? 'var(--lp-accent, #3b82f6)' : 'var(--lp-muted, #6b7280)',
     transition: 'color 0.15s ease',
   };
 
@@ -129,14 +129,14 @@ export const ThumbnailItem = React.memo<ThumbnailItemProps>(({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#f9fafb',
+              backgroundColor: 'var(--lp-hover, #f9fafb)',
             }}
           >
             <Loader2
               style={{
                 width: 24,
                 height: 24,
-                color: '#9ca3af',
+                color: 'var(--lp-muted, #9ca3af)',
                 animation: 'spin 1s linear infinite',
               }}
             />
@@ -184,14 +184,14 @@ export const ThumbnailItem = React.memo<ThumbnailItemProps>(({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: '#f9fafb',
+              backgroundColor: 'var(--lp-hover, #f9fafb)',
             }}
           >
             <span
               style={{
                 fontSize: 24,
                 fontWeight: 300,
-                color: '#d1d5db',
+                color: 'var(--lp-muted, #d1d5db)',
               }}
             >
               {pageNumber}

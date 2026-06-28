@@ -264,7 +264,11 @@ export const TextHighlight = ({
     const baseStyle: CSSProperties = { ...rect, ...style };
 
     if (highlightStyle === "highlight") {
-      baseStyle.backgroundColor = highlightColor;
+      // --hl-fill-alpha (set to <100% in dark mode by PdfHighlighter.css) makes
+      // the fill translucent so the light recolored text stays readable, while
+      // the element stays fully opaque so the border ring isn't dimmed. Light
+      // mode leaves the var unset → 100% → the original opaque color.
+      baseStyle.backgroundColor = `color-mix(in srgb, ${highlightColor} var(--hl-fill-alpha, 100%), transparent)`;
     } else {
       // For underline and strikethrough, use the color for the line
       baseStyle.backgroundColor = "transparent";

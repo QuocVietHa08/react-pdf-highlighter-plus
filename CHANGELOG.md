@@ -18,8 +18,12 @@
 - Fixed a memory leak: per-page highlight/note React roots are now unmounted on page unload and on viewer unmount.
 - Stopped re-rendering all highlight layers on every scroll tick (large annotated docs).
 
-### Text & citations
+### Text, citations & read-aloud
 - Added `getTextPosition(pdfDocument, query)` — locate text and get a precise `ScaledPosition` (whitespace-insensitive + fuzzy fallback). Turn an external quote / AI citation into a highlight you can render or scroll to.
+- Documented a **read-aloud (text-to-speech)** recipe: `extractSentences` for the ordered script + `scrollToHighlight` to highlight/follow each sentence as it's spoken.
+
+### Stability
+- Fixed React's `render(...): content was removed` warnings: per-page highlight/note layers now reuse one persistent element + root and re-attach it when PDF.js rebuilds a page, instead of recreating roots into volatile DOM (which raced React 18's async commits).
 
 # 8.0.0
 - Added safety check to `onProgress` hook in `PdfLoader` to prevent potential races and resets to loading state after a PDF has been loaded in. #1 Thank you @orausch ❤.

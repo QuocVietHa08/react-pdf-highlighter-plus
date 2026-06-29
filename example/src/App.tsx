@@ -1,4 +1,4 @@
-import React, { MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import React, { MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import CommentForm from "./CommentForm";
 import ContextMenu, { ContextMenuProps } from "./ContextMenu";
@@ -10,6 +10,9 @@ import {
   CitationsPanel,
   type CitationListItem,
 } from "./components/CitationsPanel";
+import { ReaderToolbar } from "./components/ReaderToolbar";
+import { WebSpeechTts } from "./lib/tts";
+import { useReader } from "./lib/useReader";
 import { Header } from "./components/Header";
 import { FloatingActions } from "./components/FloatingActions";
 import {
@@ -364,6 +367,59 @@ const App = () => {
       prev.filter((h) => !(h as CommentedHighlight).isCitation),
     );
   };
+
+  // --- Read aloud (PDF -> audio) ---------------------------------------------
+  const ttsEngine = useMemo(() => new WebSpeechTts(), []);
+
+  const buildReaderScript = useCallback(async () => {
+    const pdfDocument = pdfDocumentRef.current;
+    if (!pdfDocument) return [];
+    const sentences = await extractSentences(pdfDocument, {
+      includePositions: true,
+    });
+    return sentences
+      .filter((s) => s.position)
+      .map((s) => ({
+        text: s.text,
+        pageNumber: s.pageNumber,
+        position: s.position as ScaledPosition,
+      }));
+  }, []);
+
+  const handleReadSentence = useCallback(
+    (s: { text: string; pageNumber: number; position: ScaledPosition }) => {
+      const highlight: CommentedHighlight = {
+        id: "reading-highlight",
+        type: "text",
+        content: { text: s.text },
+        position: s.position,
+        isReading: true,
+        highlightColor: "rgba(16, 185, 129, 0.4)", // emerald reading marker
+      };
+      // One reading highlight at a time; follow it.
+      setHighlights((prev) => [
+        highlight,
+        ...prev.filter((h) => !(h as CommentedHighlight).isReading),
+      ]);
+      highlighterUtilsRef.current?.scrollToHighlight(highlight);
+    },
+    [],
+  );
+
+  const handleReaderStop = useCallback(() => {
+    setHighlights((prev) =>
+      prev.filter((h) => !(h as CommentedHighlight).isReading),
+    );
+  }, []);
+
+  const reader = useReader({
+    engine: ttsEngine,
+    buildScript: buildReaderScript,
+    getText: (s) => s.text,
+    onReadSentence: handleReadSentence,
+    onStop: handleReaderStop,
+    resetKey: url,
+  });
 
   const handleLoadUrl = (link: string) => {
     console.log(`Loading PDF from URL: ${link}`);
@@ -821,7 +877,9 @@ const App = () => {
         >
           <Sidebar
             highlights={highlights.filter(
-              (h) => !(h as CommentedHighlight).isCitation,
+              (h) =>
+                !(h as CommentedHighlight).isCitation &&
+                !(h as CommentedHighlight).isReading,
             )}
             resetHighlights={resetHighlights}
             toggleDocument={toggleDocument}
@@ -965,6 +1023,25 @@ const App = () => {
                         )}
                       </button>
                     )}
+                  </div>
+
+                  {/* Read-aloud transport (PDF -> audio) */}
+                  <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2">
+                    <ReaderToolbar
+                      status={reader.status}
+                      currentIndex={reader.currentIndex}
+                      total={reader.total}
+                      rate={reader.rate}
+                      voices={reader.voices}
+                      voiceId={reader.voiceId}
+                      onRateChange={reader.setRate}
+                      onVoiceChange={reader.setVoiceId}
+                      onPlay={reader.play}
+                      onPause={reader.pause}
+                      onResume={reader.resume}
+                      onStop={reader.stop}
+                      onSeek={reader.seek}
+                    />
                   </div>
                 </div>
                 </div>

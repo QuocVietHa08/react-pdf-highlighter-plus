@@ -51,6 +51,7 @@
 | **Smooth Scroll** | Animated scroll-to-highlight (respects reduced-motion) |
 | **Deep Linking** | `initialPage` + `onPageChange` for `?page=N` style navigation |
 | **Locate Text** | `getTextPosition` — turn any quote into a precise highlight (citations) |
+| **Read Aloud** | Text-to-speech that highlights & follows each sentence (recipe) |
 | **Fast Loading** | Progressive range loading, auth headers, document caching |
 | **Fully Customizable** | Exposed styling on all components |
 
@@ -431,6 +432,49 @@ if (match) {
 }
 // match: { position, pageNumber, matchedText, confidence: "exact" | "fuzzy" }
 ```
+
+---
+
+## Read Aloud (Text-to-Speech)
+
+Build a read-aloud / "PDF to audio" experience: speak the document and
+highlight + auto-scroll to each sentence as it's read. The pieces are already
+here — `extractSentences` gives the ordered script (text + position) and
+`scrollToHighlight` follows along. The TTS engine is yours to choose (the
+browser `speechSynthesis`, or a cloud voice).
+
+```tsx
+import { extractSentences } from "react-pdf-highlighter-plus";
+
+// 1. Build the ordered script once.
+const sentences = (
+  await extractSentences(pdfDocument, { includePositions: true })
+).filter((s) => s.position);
+
+// 2. Speak each sentence; highlight + scroll as it starts.
+function readFrom(index: number) {
+  const s = sentences[index];
+  if (!s) return;
+
+  const reading = {
+    id: "reading",
+    type: "text",
+    content: { text: s.text },
+    position: s.position!,
+  };
+  setHighlights((prev) => [reading, ...prev.filter((h) => h.id !== "reading")]);
+  utils.scrollToHighlight(reading); // smooth follow
+
+  const utter = new SpeechSynthesisUtterance(s.text);
+  utter.onend = () => readFrom(index + 1); // advance
+  speechSynthesis.speak(utter);
+}
+
+readFrom(0);
+```
+
+Swap `speechSynthesis` for any engine — sentence-level sync needs no word
+timing. See the example app for a full transport (play/pause/seek/speed/voice).
 
 ---
 

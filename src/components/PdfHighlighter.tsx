@@ -23,7 +23,6 @@ import getClientRects from "../lib/get-client-rects";
 import groupHighlightsByPage from "../lib/group-highlights-by-page";
 import {
   asElement,
-  findOrCreateContainerLayer,
   getDocument,
   getPageFromElement,
   getPagesFromRange,
@@ -213,32 +212,41 @@ const defaultDarkTheme: Required<PdfHighlighterTheme> = {
   darkModeColors: DEFAULT_DARK_MODE_COLORS,
 };
 
-const findOrCreateHighlightLayer = (textLayer: HTMLElement) => {
-  return findOrCreateContainerLayer(
-    textLayer,
-    "PdfHighlighter__highlight-layer",
-  );
-};
-
-const findOrCreateNoteLayer = (textLayer: HTMLElement) => {
-  const pageLayer = textLayer.closest(".page") as HTMLElement | null;
-  const container = pageLayer;
-
-  if (!container) return null;
-
-  const doc = getDocument(container);
-  let layer = Array.from(container.children).find((child) =>
-    child.classList.contains("PdfHighlighter__note-layer"),
-  );
-
-  // To ensure predictable zIndexing, wait until the pdfjs element has children.
-  if (!layer && container.children.length) {
-    layer = doc.createElement("div");
-    layer.className = "PdfHighlighter__note-layer";
-    container.appendChild(layer);
+/**
+ * Returns a stable per-page React-root layer, re-attaching the SAME element to
+ * the current parent when PDF.js has re-rendered the page into a fresh layer.
+ *
+ * This is critical: PDF.js detaches our layer when it rebuilds a page's text
+ * layer, but the element keeps its own children (React's content). Re-attaching
+ * the same element — instead of creating a new one and a new root — means React
+ * never finds its content "removed", which is what triggered the
+ * `render(...): content was removed` warning under React 18's async commits.
+ */
+const ensurePersistentLayer = (
+  bindings: { [page: number]: HighlightBindings },
+  pageNumber: number,
+  parent: HTMLElement,
+  className: string,
+): HighlightBindings => {
+  let binding = bindings[pageNumber];
+  if (!binding) {
+    const doc = getDocument(parent);
+    const layer = doc.createElement("div");
+    layer.className = className;
+    parent.appendChild(layer);
+    binding = {
+      reactRoot: createRoot(layer),
+      container: layer,
+      textLayer: parent,
+    };
+    bindings[pageNumber] = binding;
+  } else if (binding.container.parentNode !== parent) {
+    // PDF.js replaced/cleared the parent — move our element (with its React
+    // content) into the current one, keeping the same root valid.
+    parent.appendChild(binding.container);
+    binding.textLayer = parent;
   }
-
-  return layer;
+  return binding;
 };
 
 const isFreetextHighlight = (highlight: Highlight | GhostHighlight) =>
@@ -1256,46 +1264,31 @@ export const PdfHighlighter = ({
       if (!textLayer) continue; // Viewer hasn't rendered page yet
 
       const textLayerDiv = textLayer.div; // textLayer.div for version >=3.0 and textLayer.textLayerDiv otherwise.
-      const highlightLayer = findOrCreateHighlightLayer(textLayerDiv);
-      const noteLayer = findOrCreateNoteLayer(textLayerDiv);
 
-      if (highlightLayer) {
-        let highlightBindings = highlightBindingsRef.current[pageNumber];
+      // Highlight layer lives inside the (volatile) text layer; reuse + re-attach
+      // the same element/root rather than recreating it, so PDF.js page
+      // re-renders don't make React render into an emptied container.
+      const highlightBindings = ensurePersistentLayer(
+        highlightBindingsRef.current,
+        pageNumber,
+        textLayerDiv,
+        "PdfHighlighter__highlight-layer",
+      );
+      renderHighlightLayer(
+        highlightBindings,
+        pageNumber,
+        (highlight) => !isFreetextHighlight(highlight),
+      );
 
-        // Need to check if container is still attached to the DOM as PDF.js can unload pages.
-        if (!highlightBindings?.container?.isConnected) {
-          // The old page was unloaded by PDF.js — unmount its React root before
-          // replacing it, otherwise the detached tree leaks. Deferred so we
-          // never unmount synchronously during a React render.
-          unmountReactRoot(highlightBindings?.reactRoot);
-          highlightBindings = {
-            reactRoot: createRoot(highlightLayer),
-            container: highlightLayer,
-            textLayer: textLayerDiv,
-          };
-          highlightBindingsRef.current[pageNumber] = highlightBindings;
-        }
-
-        renderHighlightLayer(
-          highlightBindings,
+      // Note layer lives in the stable .page element.
+      const pageEl = textLayerDiv.closest(".page") as HTMLElement | null;
+      if (pageEl) {
+        const noteBindings = ensurePersistentLayer(
+          noteBindingsRef.current,
           pageNumber,
-          (highlight) => !isFreetextHighlight(highlight),
+          pageEl,
+          "PdfHighlighter__note-layer",
         );
-      }
-
-      if (noteLayer) {
-        let noteBindings = noteBindingsRef.current[pageNumber];
-
-        if (!noteBindings?.container?.isConnected) {
-          unmountReactRoot(noteBindings?.reactRoot);
-          noteBindings = {
-            reactRoot: createRoot(noteLayer),
-            container: noteLayer,
-            textLayer: textLayerDiv,
-          };
-          noteBindingsRef.current[pageNumber] = noteBindings;
-        }
-
         renderHighlightLayer(noteBindings, pageNumber, isFreetextHighlight);
       }
     }

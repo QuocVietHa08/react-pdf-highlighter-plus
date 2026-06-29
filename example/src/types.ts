@@ -18,4 +18,6 @@ export interface CommentedHighlight extends Highlight {
   // Citation properties (AI / saved citations)
   isCitation?: boolean;
   quote?: string;
+  // Read-aloud: the sentence currently being spoken.
+  isReading?: boolean;
 }

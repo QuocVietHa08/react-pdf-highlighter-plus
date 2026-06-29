@@ -5,6 +5,11 @@ import ContextMenu, { ContextMenuProps } from "./ContextMenu";
 import ExpandableTip from "./ExpandableTip";
 import HighlightContainer from "./HighlightContainer";
 import Sidebar from "./Sidebar";
+import { Sparkles } from "lucide-react";
+import {
+  CitationsPanel,
+  type CitationListItem,
+} from "./components/CitationsPanel";
 import { Header } from "./components/Header";
 import { FloatingActions } from "./components/FloatingActions";
 import {
@@ -24,6 +29,7 @@ import {
   extractPageTextItems,
   extractSentences,
   extractTextUnits,
+  getTextPosition,
 } from "./react-pdf-highlighter-extended";
 import "./style/App.css";
 import { CommentedHighlight } from "./types";
@@ -136,6 +142,12 @@ const App = () => {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   // Current page, announced to screen readers via an aria-live region.
   const [announcedPage, setAnnouncedPage] = useState<number>(1);
+
+  // Citations (AI quote -> precise location in the PDF).
+  const [citations, setCitations] = useState<CitationListItem[]>([]);
+  const [citationLoading, setCitationLoading] = useState<boolean>(false);
+  const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
+  const [citationsOpen, setCitationsOpen] = useState<boolean>(false);
 
   // Flip the whole app chrome (header, sidebar, cards) by toggling the `dark`
   // class on <html>; the shadcn CSS vars in App.css do the rest.
@@ -280,6 +292,77 @@ const App = () => {
     currentPdfIndexRef.current = (currentPdfIndexRef.current + 1) % urls.length;
     setUrl(urls[currentPdfIndexRef.current]);
     setHighlights(testHighlightsRef.current[urls[currentPdfIndexRef.current]] ?? []);
+  };
+
+  // Clear citations when the document changes.
+  useEffect(() => {
+    setCitations([]);
+    setActiveCitationId(null);
+  }, [url]);
+
+  // Resolve a quote to its PRECISE position via the library's getTextPosition
+  // (exact phrase rects, not a whole sentence), render it as a distinct citation
+  // highlight, and scroll/flash to it. Citation highlights are kept separate
+  // from the user's saved annotations (isCitation) so they don't clutter them.
+  const handleFindCitation = async (quote: string): Promise<boolean> => {
+    const pdfDocument = pdfDocumentRef.current;
+    if (!pdfDocument) return false;
+    setCitationLoading(true);
+    try {
+      const match = await getTextPosition(pdfDocument, quote);
+      if (!match) {
+        console.log("[citations] no match for quote");
+        return false;
+      }
+      const id = getNextId();
+      const highlight: CommentedHighlight = {
+        id,
+        type: "text",
+        content: { text: match.matchedText },
+        position: match.position,
+        isCitation: true,
+        quote,
+        highlightColor: "rgba(96, 165, 250, 0.45)", // distinct blue citation
+      };
+      // Keep all citation highlights so every list item stays clickable.
+      setHighlights((prev) => [highlight, ...prev]);
+      setCitations((prev) => [
+        {
+          id,
+          quote,
+          searchText: match.matchedText,
+          pageNumber: match.pageNumber,
+          confidence: match.confidence,
+        },
+        ...prev,
+      ]);
+      console.log("[citations] cited", {
+        page: match.pageNumber,
+        confidence: match.confidence,
+      });
+      setActiveCitationId(id);
+      setTimeout(
+        () => highlighterUtilsRef.current?.scrollToHighlight(highlight),
+        80,
+      );
+      return true;
+    } finally {
+      setCitationLoading(false);
+    }
+  };
+
+  const handleJumpCitation = (id: string) => {
+    const highlight = highlights.find((h) => h.id === id);
+    if (highlight) highlighterUtilsRef.current?.scrollToHighlight(highlight);
+    setActiveCitationId(id);
+  };
+
+  const handleClearCitations = () => {
+    setCitations([]);
+    setActiveCitationId(null);
+    setHighlights((prev) =>
+      prev.filter((h) => !(h as CommentedHighlight).isCitation),
+    );
   };
 
   const handleLoadUrl = (link: string) => {
@@ -737,7 +820,9 @@ const App = () => {
           }
         >
           <Sidebar
-            highlights={highlights}
+            highlights={highlights.filter(
+              (h) => !(h as CommentedHighlight).isCitation,
+            )}
             resetHighlights={resetHighlights}
             toggleDocument={toggleDocument}
             scrolledToHighlightId={scrolledToHighlightId}
@@ -848,6 +933,39 @@ const App = () => {
                       noteCompactMode={noteCompactMode}
                     />
                   </PdfHighlighter>
+
+                  {/* Citations demo (AI quote -> jump + highlight) */}
+                  <div className="absolute bottom-4 left-4 z-20">
+                    {citationsOpen ? (
+                      <CitationsPanel
+                        citations={citations}
+                        activeId={activeCitationId}
+                        loading={citationLoading}
+                        onFind={handleFindCitation}
+                        onJump={handleJumpCitation}
+                        onClear={handleClearCitations}
+                        onClose={() => setCitationsOpen(false)}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setCitationsOpen(true)}
+                        aria-label="Open citations"
+                        className="inline-flex items-center gap-2 rounded-full border bg-background/95 px-4 py-2.5 text-sm font-medium shadow-lg backdrop-blur transition-colors hover:bg-muted"
+                      >
+                        <Sparkles
+                          className="h-4 w-4 text-blue-500"
+                          aria-hidden="true"
+                        />
+                        Citations
+                        {citations.length > 0 && (
+                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-semibold text-white">
+                            {citations.length}
+                          </span>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 </div>
               );

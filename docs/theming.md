@@ -46,7 +46,7 @@ const [darkMode, setDarkMode] = useState(false);
 
 ```typescript
 interface PdfHighlighterTheme {
-  /** Theme mode - controls PDF page color inversion */
+  /** Theme mode */
   mode?: "light" | "dark";
 
   /** Background color of the viewer container */
@@ -59,10 +59,13 @@ interface PdfHighlighterTheme {
   scrollbarTrackColor?: string;
 
   /**
-   * Inversion intensity for dark mode (0-1).
-   * Lower values create softer dark backgrounds.
-   * @default 0.9
+   * Dark-mode recolor palette. White paper maps to `background`, black text /
+   * line-art to `foreground`. Only used when `mode === "dark"`.
+   * @default { background: "#141210", foreground: "#eae6e0" }
    */
+  darkModeColors?: { background: string; foreground: string };
+
+  /** @deprecated No longer used — dark mode no longer uses a CSS invert filter. */
   darkModeInvertIntensity?: number;
 }
 ```
@@ -73,55 +76,37 @@ interface PdfHighlighterTheme {
 
 | Property | Value | Description |
 |----------|-------|-------------|
-| `mode` | `"light"` | No PDF inversion |
-| `containerBackgroundColor` | `#e0e0e0` | Light gray container |
+| `mode` | `"light"` | Document colors as-is |
+| `containerBackgroundColor` | `#e5e5e5` | Light gray container |
 | `scrollbarThumbColor` | `#9f9f9f` | Medium gray thumb |
-| `scrollbarTrackColor` | `#cccccc` | Light gray track |
-| `darkModeInvertIntensity` | `0.9` | Not used in light mode |
+| `scrollbarTrackColor` | `#d1d1d1` | Light gray track |
 
 **Dark Theme:**
 
 | Property | Value | Description |
 |----------|-------|-------------|
-| `mode` | `"dark"` | Inverts PDF pages |
+| `mode` | `"dark"` | Recolors pages (OKLab) |
+| `darkModeColors.background` | `#141210` | Replaces white paper |
+| `darkModeColors.foreground` | `#eae6e0` | Replaces black text / line-art |
 | `containerBackgroundColor` | `#3a3a3a` | Dark gray container |
 | `scrollbarThumbColor` | `#6b6b6b` | Visible gray thumb |
 | `scrollbarTrackColor` | `#2c2c2c` | Dark track |
-| `darkModeInvertIntensity` | `0.9` | Soft inversion |
 
 ---
 
-## Dark Mode Inversion Intensity
+## Dark Mode Palette
 
-The `darkModeInvertIntensity` property controls how dark the PDF pages appear in dark mode. Lower values create softer backgrounds that are easier on the eyes during extended reading.
-
-### Intensity Guide
-
-| Value | Result | Use Case |
-|-------|--------|----------|
-| `1.0` | Pure black (`#000000`) | Maximum contrast (harsh) |
-| `0.9` | Dark gray (`~#1a1a1a`) | **Recommended default** |
-| `0.85` | Softer gray (`~#262626`) | Long reading sessions |
-| `0.8` | Medium gray (`~#333333`) | Maximum comfort |
-
-### Visual Comparison
-
-```
-invert(1.0):   ████████████████  Pure black - harsh on eyes
-invert(0.9):   ░░████████████░░  Dark gray - recommended
-invert(0.85):  ░░░░████████░░░░  Softer gray - comfortable
-invert(0.8):   ░░░░░░████░░░░░░  Medium gray - very soft
-```
-
-### Example: Custom Intensity
+`darkModeColors` sets the two ends of the recolor ramp: `background` (where white
+paper lands) and `foreground` (where black text lands). Everything in between is
+mapped along an OKLab ramp that **preserves hue and chroma**, so colored text and
+accents stay recognizable.
 
 ```tsx
-// Very comfortable for night reading
 <PdfHighlighter
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 0.85,
+    darkModeColors: { background: "#0d1117", foreground: "#e6edf3" }, // cool gray
   }}
 />
 ```
@@ -130,34 +115,24 @@ invert(0.8):   ░░░░░░████░░░░░░  Medium gray - v
 
 ## How Dark Mode Works
 
-Dark mode uses CSS filters to invert PDF page colors:
+Dark mode recolors each page **at render time** (not with a CSS filter):
 
-1. **Page Inversion**: PDF pages are inverted using `filter: invert() hue-rotate(180deg)`, turning white backgrounds dark and dark text light.
+1. **Page recolor**: as PDF.js paints a page, every fill/stroke color is mapped
+   through a hue-preserving OKLab map — white → `background`, black → `foreground`,
+   colors keep their hue.
 
-2. **Highlight Preservation**: Highlights are double-inverted to preserve their original colors, so a yellow highlight stays yellow in dark mode.
+2. **Photos preserved**: image draws (`drawImage`) are left untouched, so embedded
+   photos don't get inverted/distorted.
 
-3. **Brightness Adjustment**: A subtle brightness adjustment ensures text remains readable.
+3. **Highlights**: render normally over the already-recolored page. Their fill is
+   made translucent (`--hl-fill-alpha`) so the light text stays readable, with a
+   border for definition — no `mix-blend` wash-out.
 
-### CSS Applied
+4. **Left panel**: pass `mode="dark"` to `LeftPanel` so the outline/thumbnails
+   match.
 
-```css
-/* Dark mode page inversion */
-.PdfHighlighter--dark .page {
-  filter: invert(0.9) hue-rotate(180deg) brightness(1.05);
-}
-
-/* Double-invert highlights to preserve colors */
-.PdfHighlighter--dark .PdfHighlighter__highlight-layer {
-  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
-}
-
-.PdfHighlighter--dark .PdfHighlighter__note-layer,
-.PdfHighlighter--dark .PdfHighlighter__config-layer {
-  filter: invert(0.9) hue-rotate(180deg) brightness(0.95);
-}
-```
-
-The package uses separate overlay layers for geometry, notes, and configuration UI. In dark mode, each overlay layer is adjusted so annotation colors and controls remain readable.
+> The previous CSS `invert()` approach (and `darkModeInvertIntensity`) is gone —
+> it distorted photos and colored text.
 
 ---
 
@@ -170,7 +145,7 @@ The package uses separate overlay layers for geometry, notes, and configuration 
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 0.85,
+    darkModeColors: { background: "#141210", foreground: "#eae6e0" },
     containerBackgroundColor: "#2d2d2d",
     scrollbarThumbColor: "#555555",
     scrollbarTrackColor: "#1a1a1a",
@@ -186,7 +161,7 @@ The package uses separate overlay layers for geometry, notes, and configuration 
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 0.85,
+    darkModeColors: { background: "#1c1917", foreground: "#e7e0d6" }, // warm
     containerBackgroundColor: "#1c1917",  // Warm brown-tinted dark
   }}
 />
@@ -200,7 +175,7 @@ The package uses separate overlay layers for geometry, notes, and configuration 
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 1.0,  // Pure black
+    darkModeColors: { background: "#000000", foreground: "#ffffff" }, // max contrast
     containerBackgroundColor: "#000000",
   }}
 />
@@ -213,9 +188,9 @@ The package uses separate overlay layers for geometry, notes, and configuration 
 In dark mode, it's important to distinguish between:
 
 1. **Container Background**: The area around the PDF pages (controlled by `containerBackgroundColor`)
-2. **PDF Page Background**: The inverted PDF content (controlled by `darkModeInvertIntensity`)
+2. **PDF Page Background**: The recolored PDF content (controlled by `darkModeColors.background`)
 
-The default dark theme uses `#3a3a3a` for the container, which is lighter than the inverted PDF pages (`~#1a1a1a`), creating clear visual separation.
+The default dark theme uses `#3a3a3a` for the container, which is lighter than the recolored PDF pages (`#141210`), creating clear visual separation.
 
 ```
 ┌─────────────────────────────────────┐
@@ -251,11 +226,11 @@ The following CSS classes are applied based on theme mode:
 }
 
 .PdfHighlighter--dark .page {
-  /* Override PDF page inversion */
+  /* Page-level styling (recolor happens on the canvas) */
 }
 
 .PdfHighlighter--dark .PdfHighlighter__highlight-layer {
-  /* Override highlight inversion */
+  /* Highlight layer styling */
 }
 ```
 
@@ -263,7 +238,7 @@ The following CSS classes are applied based on theme mode:
 
 ## Best Practices
 
-1. **Use `0.9` intensity** for most users - balances readability and comfort
+1. **Pick a comfortable `darkModeColors` palette** (warm grays read well for long sessions)
 2. **Match container color** to your app's dark theme for visual consistency
 3. **Test highlight colors** in dark mode to ensure they remain visible
 4. **Consider user preference** - store theme choice in localStorage or user settings
@@ -301,8 +276,8 @@ function App() {
             pdfDocument={pdfDocument}
             theme={{
               mode: darkMode ? "dark" : "light",
-              // Optional: customize intensity for user comfort
-              darkModeInvertIntensity: 0.9,
+              // Optional: customize the dark palette
+              darkModeColors: { background: "#141210", foreground: "#eae6e0" },
             }}
             highlights={highlights}
           >

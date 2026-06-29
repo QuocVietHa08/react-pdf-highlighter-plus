@@ -129,6 +129,36 @@ const highlights = sentences
 
 ---
 
+### getTextPosition
+
+Locate a piece of text in the PDF and return its **precise** position (the rects
+of the exact phrase, per line — not a whole sentence). Use it to turn an external
+quote / AI citation into a highlight you can render or scroll to. Matching ignores
+whitespace and line-wraps, with a bounded fuzzy fallback.
+
+```tsx
+import { getTextPosition } from "react-pdf-highlighter-plus";
+
+const match = await getTextPosition(pdfDocument, "the quote to locate");
+// match: { position: ScaledPosition; pageNumber: number;
+//          matchedText: string; confidence: "exact" | "fuzzy" } | null
+
+if (match) {
+  const highlight = {
+    id: "cite-1",
+    type: "text",
+    content: { text: match.matchedText },
+    position: match.position,
+  };
+  setHighlights((prev) => [highlight, ...prev]);
+  utils.scrollToHighlight(highlight); // smooth scroll + flash
+}
+```
+
+**Options:** `getTextPosition(pdfDocument, query, { pages?: "all" | number[]; fuzzy?: boolean })`
+
+---
+
 ## Components
 
 ### TextHighlight
@@ -441,7 +471,7 @@ URL.revokeObjectURL(url);
 
 ```typescript
 interface PdfHighlighterTheme {
-  /** Theme mode - controls PDF page color inversion */
+  /** Theme mode */
   mode?: "light" | "dark";
 
   /** Background color of the viewer container */
@@ -454,14 +484,13 @@ interface PdfHighlighterTheme {
   scrollbarTrackColor?: string;
 
   /**
-   * Inversion intensity for dark mode (0-1).
-   * Lower values create softer dark backgrounds that are easier on the eyes.
-   * - 1.0 = Pure black background (harsh)
-   * - 0.9 = Dark gray ~#1a1a1a (recommended)
-   * - 0.85 = Softer gray ~#262626 (very comfortable)
-   * - 0.8 = Medium gray ~#333333 (maximum softness)
-   * @default 0.9
+   * Dark-mode recolor palette (hue-preserving OKLab). White paper maps to
+   * `background`, black text / line-art to `foreground`. Only used in dark mode.
+   * @default { background: "#141210", foreground: "#eae6e0" }
    */
+  darkModeColors?: { background: string; foreground: string };
+
+  /** @deprecated No longer used — dark mode no longer uses a CSS invert filter. */
   darkModeInvertIntensity?: number;
 }
 ```
@@ -472,10 +501,9 @@ interface PdfHighlighterTheme {
 ```typescript
 {
   mode: "light",
-  containerBackgroundColor: "#e0e0e0",
+  containerBackgroundColor: "#e5e5e5",
   scrollbarThumbColor: "#9f9f9f",
-  scrollbarTrackColor: "#cccccc",
-  darkModeInvertIntensity: 0.9,
+  scrollbarTrackColor: "#d1d1d1",
 }
 ```
 
@@ -483,10 +511,10 @@ interface PdfHighlighterTheme {
 ```typescript
 {
   mode: "dark",
-  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF (~#1a1a1a) for contrast
+  darkModeColors: { background: "#141210", foreground: "#eae6e0" },
+  containerBackgroundColor: "#3a3a3a",  // Lighter than the page for contrast
   scrollbarThumbColor: "#6b6b6b",
   scrollbarTrackColor: "#2c2c2c",
-  darkModeInvertIntensity: 0.9,
 }
 ```
 
@@ -499,12 +527,12 @@ interface PdfHighlighterTheme {
   theme={{ mode: "dark" }}
 />
 
-// Custom theme with softer inversion
+// Custom dark palette
 <PdfHighlighter
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 0.85,
+    darkModeColors: { background: "#0d1117", foreground: "#e6edf3" },
     containerBackgroundColor: "#2a2a2a",
   }}
 />

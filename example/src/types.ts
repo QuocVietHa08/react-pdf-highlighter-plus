@@ -15,4 +15,7 @@ export interface CommentedHighlight extends Highlight {
   shapeType?: "rectangle" | "circle" | "arrow";
   strokeColor?: string;
   strokeWidth?: number;
+  // Citation properties (AI / saved citations)
+  isCitation?: boolean;
+  quote?: string;
 }

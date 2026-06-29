@@ -1370,27 +1370,44 @@ export const PdfHighlighter = ({
   const scrollToHighlight = (highlight: Highlight) => {
     const { boundingRect, usePdfCoordinates } = highlight.position;
     const pageNumber = boundingRect.pageNumber;
+    const viewer = viewerRef.current;
+    if (!viewer) return;
 
     // Remove scroll listener in case user auto-scrolls in succession.
-    viewerRef.current!.container.removeEventListener("scroll", handleScroll);
+    viewer.container.removeEventListener("scroll", handleScroll);
 
-    const pageViewport = viewerRef.current!.getPageView(
-      pageNumber - 1,
-    ).viewport;
+    const pageView = viewer.getPageView(pageNumber - 1);
+    const container = viewer.container;
 
-    viewerRef.current!.scrollPageIntoView({
-      pageNumber,
-      destArray: [
-        null, // null since we pass pageNumber already as an arg
-        { name: "XYZ" },
-        ...pageViewport.convertToPdfPoint(
-          0, // Default x coord
-          scaledToViewport(boundingRect, pageViewport, usePdfCoordinates).top -
-          SCROLL_MARGIN,
-        ),
-        0, // Default z coord
-      ],
-    });
+    if (pageView?.div && pageView.viewport) {
+      // Compute the absolute scroll target ourselves so we can animate it
+      // smoothly (pdf.js scrollPageIntoView jumps instantly). The page div
+      // already has its final offset even before the page is rasterised, so
+      // jumping across many pages still lands in the right place.
+      const topInPage = scaledToViewport(
+        boundingRect,
+        pageView.viewport,
+        usePdfCoordinates,
+      ).top;
+      const pageRect = pageView.div.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const target =
+        container.scrollTop +
+        (pageRect.top - containerRect.top) +
+        topInPage -
+        SCROLL_MARGIN;
+      // Respect the OS "reduce motion" setting (JS smooth scroll ignores CSS).
+      const prefersReducedMotion =
+        typeof window !== "undefined" &&
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      container.scrollTo({
+        top: Math.max(0, target),
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+      });
+    } else {
+      // Fallback: page view not available — let pdf.js handle it.
+      viewer.scrollPageIntoView({ pageNumber });
+    }
 
     scrolledToHighlightIdRef.current = highlight.id;
     scheduleRenderHighlightLayers();

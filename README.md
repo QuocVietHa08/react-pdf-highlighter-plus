@@ -46,8 +46,12 @@
 | **PDF Search** | Search through all PDF text with next/previous navigation |
 | **PDF Export** | Export annotated PDF with all highlights embedded |
 | **Local PDF Worker** | Uses the packaged PDF.js worker by default |
-| **Light/Dark Theme** | Eye-friendly dark mode with customizable intensity |
-| **Zoom Support** | Full zoom functionality with position-independent data |
+| **Light/Dark Theme** | Hue-preserving dark mode (OKLab recolor) — photos & colors stay readable |
+| **Zoom Support** | Buttons, **pinch / ctrl+wheel zoom**, position-independent data |
+| **Smooth Scroll** | Animated scroll-to-highlight (respects reduced-motion) |
+| **Deep Linking** | `initialPage` + `onPageChange` for `?page=N` style navigation |
+| **Locate Text** | `getTextPosition` — turn any quote into a precise highlight (citations) |
+| **Fast Loading** | Progressive range loading, auth headers, document caching |
 | **Fully Customizable** | Exposed styling on all components |
 
 ## Quick Links
@@ -299,10 +303,13 @@ highlighterUtilsRef.current?.clearSearch();
 
 ## Light/Dark Theme
 
-Toggle between light and dark modes with customizable styling for comfortable reading.
+Dark mode recolors each page **at render time** using a hue-preserving OKLab map —
+white paper maps to a dark background and black text to a light foreground, while
+**colors keep their hue and embedded photos keep their pixels** (unlike a CSS
+`invert()` filter). Highlights, the text selection, and the left panel all adapt.
 
 ```tsx
-// Enable dark mode
+// Enable dark mode (warm-gray default palette)
 <PdfHighlighter
   pdfDocument={pdfDocument}
   theme={{ mode: "dark" }}
@@ -311,12 +318,15 @@ Toggle between light and dark modes with customizable styling for comfortable re
   <HighlightContainer />
 </PdfHighlighter>
 
-// Customize dark mode intensity and colors
+// Customize the dark palette
 <PdfHighlighter
   pdfDocument={pdfDocument}
   theme={{
     mode: "dark",
-    darkModeInvertIntensity: 0.85,  // Softer (0.8-1.0)
+    darkModeColors: {
+      background: "#141210", // replaces white paper
+      foreground: "#eae6e0", // replaces black text / line-art
+    },
     containerBackgroundColor: "#3a3a3a",
     scrollbarThumbColor: "#6b6b6b",
     scrollbarTrackColor: "#2c2c2c",
@@ -327,22 +337,100 @@ Toggle between light and dark modes with customizable styling for comfortable re
 </PdfHighlighter>
 ```
 
-**Features:**
-- Eye-friendly dark mode using CSS filter inversion
-- Customizable inversion intensity (0.8-1.0)
-- Preserve original highlight colors in dark mode
-- Custom scrollbar styling
-- Full theming control for container background
+**Highlights:**
+- Hue-preserving recolor (red stays red, blue links stay blue); photos untouched.
+- Highlights stay readable: translucent fill + a border, with no `mix-blend` wash-out.
+- Scroll **and** zoom are preserved when toggling the theme.
+- `LeftPanel` accepts `mode="dark"` so the outline/thumbnails panel matches.
+- Drawing/shape default ink becomes white in dark mode.
 
-**Inversion Intensity Guide:**
-| Value | Result | Use Case |
-|-------|--------|----------|
-| `1.0` | Pure black | High contrast |
-| `0.9` | Dark gray (~#1a1a1a) | **Recommended** |
-| `0.85` | Softer gray (~#262626) | Long reading sessions |
-| `0.8` | Medium gray (~#333333) | Maximum comfort |
+> **Deprecated:** `theme.darkModeInvertIntensity` is ignored — dark mode no longer
+> uses a CSS `invert()` filter. Use `theme.darkModeColors` instead.
 
 [Full Documentation →](docs/theming.md)
+
+---
+
+## Loading & Performance
+
+`PdfLoader` loads documents progressively and caches them.
+
+```tsx
+<PdfLoader
+  document="https://api.example.com/files/report.pdf"
+  // Fetch only the pages needed to render first (needs server HTTP range support)
+  disableAutoFetch={true}
+  // Auth / cross-origin
+  httpHeaders={{ Authorization: `Bearer ${token}` }}
+  withCredentials={false}
+  // Reuse the same URL instantly on remount / re-open (default true)
+  enableCache={true}
+>
+  {(pdfDocument) => <PdfHighlighter pdfDocument={pdfDocument} /* … */ />}
+</PdfLoader>
+```
+
+| Prop | Default | Description |
+|------|---------|-------------|
+| `disableAutoFetch` | `true` | Fetch pages on demand instead of the whole file (first page shows fast on range-capable servers) |
+| `disableStream` | `false` | Disable progressive streaming |
+| `rangeChunkSize` | pdf.js | Size of each range request in bytes |
+| `httpHeaders` | – | Extra request headers (e.g. an auth token) |
+| `withCredentials` | `false` | Send cookies with the request |
+| `enableCache` | `true` | Cache the loaded document by URL (also dedupes StrictMode double-mount) |
+| `beforeLoad` | spinner | Render while loading; receives progress or `null` |
+
+> Progressive loading requires the server to support HTTP range requests
+> (`Accept-Ranges: bytes`) **and** expose `Content-Range` via CORS.
+
+---
+
+## Navigation, Zoom & Smooth Scroll
+
+```tsx
+<PdfHighlighter
+  pdfDocument={pdfDocument}
+  initialPage={12}                         // jump here on first load (deep-link)
+  onPageChange={(page) => syncUrl(page)}    // current page changed
+  onZoomChange={(scale) => setZoom(scale)}  // pinch / ctrl+wheel zoom changed
+  highlights={highlights}
+>
+  <HighlightContainer />
+</PdfHighlighter>
+```
+
+- **Pinch / ctrl(⌘)+wheel zoom** is built in — smooth (GPU transform during the
+  gesture, one crisp re-render on settle), anchored to the cursor.
+- **`scrollToHighlight(highlight)`** (from `usePdfHighlighterContext`) now scrolls
+  **smoothly** and respects `prefers-reduced-motion`.
+- `initialPage` is applied once on load; `onPageChange` fires as the visible page
+  changes — wire them to a `?page=N` URL for deep links.
+
+---
+
+## Locating Text (Citations)
+
+`getTextPosition` finds a piece of text in the PDF and returns a precise
+`ScaledPosition` — turn an external quote (e.g. an AI citation) into a highlight
+you can render or scroll to. Matching ignores whitespace/line-wraps and falls
+back to fuzzy matching.
+
+```tsx
+import { getTextPosition } from "react-pdf-highlighter-plus";
+
+const match = await getTextPosition(pdfDocument, "the exact or near-exact quote");
+if (match) {
+  const citation = {
+    id: "cite-1",
+    type: "text",
+    content: { text: match.matchedText },
+    position: match.position,   // precise rects, page-independent
+  };
+  setHighlights((prev) => [citation, ...prev]);
+  utils.scrollToHighlight(citation); // smooth scroll + flash
+}
+// match: { position, pageNumber, matchedText, confidence: "exact" | "fuzzy" }
+```
 
 ---
 

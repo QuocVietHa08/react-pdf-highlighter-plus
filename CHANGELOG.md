@@ -1,3 +1,26 @@
+# Unreleased
+
+### Dark mode
+- Rewrote dark mode to recolor pages **at render time** with a hue-preserving OKLab map — colors keep their hue and embedded photos keep their pixels (no more CSS `invert()`). Configure via `theme.darkModeColors` (`{ background, foreground }`).
+- **Deprecated** `theme.darkModeInvertIntensity` (ignored).
+- Highlights, text selection, and the drag-select rectangle stay readable in dark mode (translucent fill + border, `--hl-fill-alpha`).
+- `LeftPanel` gained a `mode` prop (`"light" | "dark"`); outline/thumbnail colors follow it.
+- Drawing/shape default ink is white in dark mode.
+- Scroll position **and** zoom are preserved when toggling the theme.
+
+### Navigation & zoom
+- Added `initialPage` and `onPageChange` props for deep-linking (`?page=N`).
+- Built-in **pinch / ctrl(⌘)+wheel zoom**, smooth via a GPU transform during the gesture with one crisp re-render on settle; added `onZoomChange`.
+- `scrollToHighlight` now scrolls **smoothly** and respects `prefers-reduced-motion`.
+
+### Loading & performance
+- `PdfLoader`: progressive range loading (`disableAutoFetch`, `disableStream`, `rangeChunkSize`), auth (`httpHeaders`, `withCredentials`), URL-keyed document cache (`enableCache`), and a skeleton loader.
+- Fixed a memory leak: per-page highlight/note React roots are now unmounted on page unload and on viewer unmount.
+- Stopped re-rendering all highlight layers on every scroll tick (large annotated docs).
+
+### Text & citations
+- Added `getTextPosition(pdfDocument, query)` — locate text and get a precise `ScaledPosition` (whitespace-insensitive + fuzzy fallback). Turn an external quote / AI citation into a highlight you can render or scroll to.
+
 # 8.0.0
 - Added safety check to `onProgress` hook in `PdfLoader` to prevent potential races and resets to loading state after a PDF has been loaded in. #1 Thank you @orausch ❤.
 - Removed `MouseSelectionRenderer` and moved any necessary logic into `MouseSelection`.

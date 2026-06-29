@@ -134,6 +134,15 @@ const App = () => {
   const [leftPanelOpen, setLeftPanelOpen] = useState<boolean>(true);
   // Dark mode state
   const [darkMode, setDarkMode] = useState<boolean>(false);
+  // Current page, announced to screen readers via an aria-live region.
+  const [announcedPage, setAnnouncedPage] = useState<number>(1);
+
+  // Flip the whole app chrome (header, sidebar, cards) by toggling the `dark`
+  // class on <html>; the shadcn CSS vars in App.css do the rest.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    return () => document.documentElement.classList.remove("dark");
+  }, [darkMode]);
 
   // Responsive: below 768px the side panels become overlay drawers instead of
   // taking layout width, so the PDF gets the full screen.
@@ -666,6 +675,10 @@ const App = () => {
 
   return (
     <div className="flex h-screen flex-col bg-background">
+      {/* Screen-reader announcement of the current page */}
+      <div className="sr-only" aria-live="polite" role="status">
+        Page {announcedPage}
+      </div>
       {/* Header */}
       <Header
         pdfScaleValue={pdfScaleValue}
@@ -776,8 +789,12 @@ const App = () => {
                       ) || undefined
                     }
                     onPageChange={(page) => {
+                      setAnnouncedPage(page);
                       const url = new URL(window.location.href);
-                      url.searchParams.set("page", String(page));
+                      // Page 1 is the default — keep the URL clean instead of
+                      // writing ?page=1 on a fresh load.
+                      if (page <= 1) url.searchParams.delete("page");
+                      else url.searchParams.set("page", String(page));
                       window.history.replaceState(null, "", url);
                       console.log("[example] page ->", page, url.search);
                     }}

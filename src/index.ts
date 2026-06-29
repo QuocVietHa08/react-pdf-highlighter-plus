@@ -64,6 +64,7 @@ import {
   extractPageTextItems,
   extractSentences,
   extractTextUnits,
+  getTextPosition,
   sentenceToHighlight,
 } from "./lib/extract-sentences";
 import type {
@@ -73,6 +74,7 @@ import type {
   PdfReadingOrder,
   PdfSentence,
   PdfSentenceSource,
+  TextPositionMatch,
   PdfTextColumn,
   PdfTextUnit,
   PdfTextUnitType,
@@ -166,6 +168,7 @@ export {
   extractPageTextItems,
   extractSentences,
   extractTextUnits,
+  getTextPosition,
   sentenceToHighlight,
 };
 
@@ -198,6 +201,7 @@ export type {
   PdfReadingOrder,
   PdfSentence,
   PdfSentenceSource,
+  TextPositionMatch,
   PdfTextColumn,
   PdfTextUnit,
   PdfTextUnitType,

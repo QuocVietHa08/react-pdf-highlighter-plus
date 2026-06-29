@@ -9,7 +9,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import {
   PdfHighlighterContext,
   PdfSearchOptions,
@@ -134,6 +134,19 @@ export interface PdfHighlighterTheme {
 const DEFAULT_DARK_MODE_COLORS = {
   background: "#141210",
   foreground: "#eae6e0",
+};
+
+// Unmount a per-page React root, deferred so it never runs synchronously inside
+// a React render/commit (which React warns about). Tolerates double-unmount.
+const unmountReactRoot = (root?: Root | null) => {
+  if (!root) return;
+  queueMicrotask(() => {
+    try {
+      root.unmount();
+    } catch {
+      /* already unmounted */
+    }
+  });
 };
 
 const RECOLOR_PATCHED = Symbol("pdfRecolorPatched");
@@ -721,6 +734,18 @@ export const PdfHighlighter = ({
     };
   }, [selectionTip, highlights, onSelectionFinished]);
 
+  // Unmount every per-page highlight/note React root when the viewer unmounts —
+  // these roots are mounted into PDF.js-owned DOM (outside React's tree) so they
+  // are not torn down automatically and would otherwise leak.
+  useEffect(() => {
+    return () => {
+      for (const binding of Object.values(highlightBindingsRef.current))
+        unmountReactRoot(binding?.reactRoot);
+      for (const binding of Object.values(noteBindingsRef.current))
+        unmountReactRoot(binding?.reactRoot);
+    };
+  }, []);
+
   // Page tracking + deep-link / initial page. Registered after the listeners
   // effect so this `pagesinit` handler runs after handleScaleValue (scale set
   // before we scroll to the initial page). Refs keep the listeners stable so we
@@ -1239,6 +1264,10 @@ export const PdfHighlighter = ({
 
         // Need to check if container is still attached to the DOM as PDF.js can unload pages.
         if (!highlightBindings?.container?.isConnected) {
+          // The old page was unloaded by PDF.js — unmount its React root before
+          // replacing it, otherwise the detached tree leaks. Deferred so we
+          // never unmount synchronously during a React render.
+          unmountReactRoot(highlightBindings?.reactRoot);
           highlightBindings = {
             reactRoot: createRoot(highlightLayer),
             container: highlightLayer,
@@ -1258,6 +1287,7 @@ export const PdfHighlighter = ({
         let noteBindings = noteBindingsRef.current[pageNumber];
 
         if (!noteBindings?.container?.isConnected) {
+          unmountReactRoot(noteBindings?.reactRoot);
           noteBindings = {
             reactRoot: createRoot(noteLayer),
             container: noteLayer,

@@ -95,6 +95,7 @@ export function Header({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [openPdfModal, setOpenPdfModal] = React.useState(false);
   const [linkInput, setLinkInput] = React.useState("");
+  const dialogRef = React.useRef<HTMLDivElement>(null);
 
   const submitLink = () => {
     const link = linkInput.trim();
@@ -103,6 +104,39 @@ export function Header({
     setLinkInput("");
     setOpenPdfModal(false);
   };
+
+  // Modal a11y: close on Esc, trap Tab focus inside the dialog, and return focus
+  // to the trigger on close.
+  React.useEffect(() => {
+    if (!openPdfModal) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpenPdfModal(false);
+        return;
+      }
+      if (e.key !== "Tab" || !dialogRef.current) return;
+      const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus?.();
+    };
+  }, [openPdfModal]);
   const displayZoom = pdfScaleValue
     ? `${Math.round(pdfScaleValue * 100)}%`
     : "Auto";
@@ -156,6 +190,8 @@ export function Header({
                 variant="ghost"
                 size="icon"
                 onClick={onToggleSidebar}
+                aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                aria-expanded={sidebarOpen}
                 className="h-9 w-9"
               >
                 {sidebarOpen ? (
@@ -186,19 +222,21 @@ export function Header({
         <div className="flex flex-shrink-0 items-center gap-2">
           {/* Search controls */}
           <form
+            role="search"
             className="flex items-center gap-1 rounded-md border bg-muted/50 p-1"
             onSubmit={(event) => {
               event.preventDefault();
               onSearchSubmit();
             }}
           >
-            <Search className="ml-2 h-4 w-4 text-muted-foreground" />
+            <Search className="ml-2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
             <Input
               ref={searchInputRef}
               value={searchQuery}
               onChange={(event) => onSearchQueryChange(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Search PDF"
+              aria-label="Search PDF"
               className="h-7 w-44 border-0 bg-transparent px-2 py-1 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             <Tooltip>
@@ -209,6 +247,7 @@ export function Header({
                   size="icon"
                   onClick={onToggleSearchCaseSensitive}
                   className="h-7 w-7 text-xs font-semibold"
+                  aria-label="Match case"
                   aria-pressed={searchCaseSensitive}
                 >
                   Aa
@@ -224,6 +263,7 @@ export function Header({
                   size="icon"
                   onClick={onToggleSearchWholeWord}
                   className="h-7 w-7 text-xs font-semibold"
+                  aria-label="Match whole word"
                   aria-pressed={searchWholeWord}
                 >
                   W
@@ -231,7 +271,17 @@ export function Header({
               </TooltipTrigger>
               <TooltipContent>Whole word</TooltipContent>
             </Tooltip>
-            <span className="min-w-[54px] text-center text-xs text-muted-foreground">
+            <span
+              className="min-w-[54px] text-center text-xs text-muted-foreground"
+              aria-live="polite"
+              aria-label={
+                searchTotal > 0
+                  ? `Match ${searchCurrent} of ${searchTotal}`
+                  : searchQuery
+                    ? "No matches"
+                    : undefined
+              }
+            >
               {isSearchPending
                 ? "..."
                 : searchTotal > 0
@@ -248,9 +298,10 @@ export function Header({
                   size="icon"
                   onClick={onSearchPrevious}
                   disabled={!searchQuery}
+                  aria-label="Previous match"
                   className="h-7 w-7"
                 >
-                  <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Previous match</TooltipContent>
@@ -263,9 +314,10 @@ export function Header({
                   size="icon"
                   onClick={onSearchNext}
                   disabled={!searchQuery}
+                  aria-label="Next match"
                   className="h-7 w-7"
                 >
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Next match</TooltipContent>
@@ -278,9 +330,10 @@ export function Header({
                   size="icon"
                   onClick={onSearchClear}
                   disabled={!searchQuery}
+                  aria-label="Clear search"
                   className="h-7 w-7"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Clear search</TooltipContent>
@@ -297,15 +350,20 @@ export function Header({
                   variant="ghost"
                   size="icon"
                   onClick={onZoomOut}
+                  aria-label="Zoom out"
                   className="h-7 w-7"
                 >
-                  <Minus className="h-4 w-4" />
+                  <Minus className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Zoom out</TooltipContent>
             </Tooltip>
 
-            <span className="min-w-[60px] text-center text-sm font-medium">
+            <span
+              className="min-w-[60px] text-center text-sm font-medium"
+              aria-live="polite"
+              aria-label={`Zoom ${displayZoom}`}
+            >
               {displayZoom}
             </span>
 
@@ -315,9 +373,10 @@ export function Header({
                   variant="ghost"
                   size="icon"
                   onClick={onZoomIn}
+                  aria-label="Zoom in"
                   className="h-7 w-7"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Zoom in</TooltipContent>
@@ -333,9 +392,11 @@ export function Header({
                 variant={noteCompactMode ? "default" : "ghost"}
                 size="icon"
                 onClick={onToggleNoteCompactMode}
+                aria-label={noteCompactMode ? "Show full notes" : "Compact notes"}
+                aria-pressed={noteCompactMode}
                 className="h-9 w-9"
               >
-                <Minimize2 className="h-5 w-5" />
+                <Minimize2 className="h-5 w-5" aria-hidden="true" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -352,12 +413,14 @@ export function Header({
                 variant="ghost"
                 size="icon"
                 onClick={onToggleDarkMode}
+                aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                aria-pressed={darkMode}
                 className="h-9 w-9"
               >
                 {darkMode ? (
-                  <Sun className="h-5 w-5" />
+                  <Sun className="h-5 w-5" aria-hidden="true" />
                 ) : (
-                  <Moon className="h-5 w-5" />
+                  <Moon className="h-5 w-5" aria-hidden="true" />
                 )}
               </Button>
             </TooltipTrigger>
@@ -443,18 +506,25 @@ export function Header({
           onClick={() => setOpenPdfModal(false)}
         >
           <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="open-pdf-title"
             className="w-full max-w-md rounded-lg border bg-background p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold">Open PDF</h2>
+              <h2 id="open-pdf-title" className="text-base font-semibold">
+                Open PDF
+              </h2>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
+                aria-label="Close dialog"
                 onClick={() => setOpenPdfModal(false)}
               >
-                <X className="h-4 w-4" />
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
 

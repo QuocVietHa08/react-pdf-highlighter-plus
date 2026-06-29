@@ -31,6 +31,32 @@
     --ring: 240 5.9% 10%;
     --radius: 0.5rem;
   }
+
+  /* Dark app chrome (header, sidebar, cards, buttons). Warm grays to match the
+     PDF page recolor palette. Toggled by the `dark` class on <html>. Components
+     read these vars via bg-background / text-foreground / border-border, so the
+     whole UI flips with no per-component changes. */
+  .dark {
+    --background: 30 8% 8%;
+    --foreground: 40 12% 90%;
+    --card: 30 8% 10%;
+    --card-foreground: 40 12% 90%;
+    --popover: 30 8% 10%;
+    --popover-foreground: 40 12% 90%;
+    --primary: 40 12% 90%;
+    --primary-foreground: 30 8% 10%;
+    --secondary: 30 6% 16%;
+    --secondary-foreground: 40 12% 90%;
+    --muted: 30 6% 16%;
+    --muted-foreground: 40 6% 60%;
+    --accent: 30 6% 18%;
+    --accent-foreground: 40 12% 90%;
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 40 12% 90%;
+    --border: 30 6% 20%;
+    --input: 30 6% 20%;
+    --ring: 40 6% 60%;
+  }
 }
 
 @layer base {
@@ -43,5 +69,18 @@
       "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
       sans-serif;
     margin: 0;
+  }
+}
+
+/* Respect the OS "reduce motion" setting: near-instant transitions/animations
+   (drawer slides, spinners, hovers) and no smooth scroll. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

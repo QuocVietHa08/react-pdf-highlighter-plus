@@ -167,3 +167,16 @@
   mix-blend-mode: normal;
   opacity: 0.4;
 }
+
+/* Respect the OS "reduce motion" setting within the viewer (scoped so the
+   library doesn't override a consumer's whole app). */
+@media (prefers-reduced-motion: reduce) {
+  .PdfHighlighter,
+  .PdfHighlighter *,
+  .PdfHighlighter *::before,
+  .PdfHighlighter *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

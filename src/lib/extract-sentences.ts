@@ -1166,3 +1166,227 @@ export const sentenceToHighlight = (
     position: sentence.position,
   };
 };
+
+/** Strip ALL whitespace, lowercase, unify quotes — keeping a map from each
+ *  stripped-char index back to its index in the raw string. Matching on the
+ *  whitespace-free form makes line-wraps / inconsistent PDF spacing irrelevant. */
+const stripWhitespaceWithMap = (
+  raw: string,
+): { stripped: string; map: number[] } => {
+  let stripped = "";
+  const map: number[] = [];
+  for (let i = 0; i < raw.length; i += 1) {
+    const c = raw[i]!;
+    if (/\s/.test(c)) continue;
+    let ch = c.toLowerCase();
+    if (ch === "‘" || ch === "’") ch = "'";
+    else if (ch === "“" || ch === "”") ch = '"';
+    stripped += ch;
+    map.push(i);
+  }
+  return { stripped, map };
+};
+
+/** Levenshtein distance, bounded — returns `max + 1` as soon as it's exceeded. */
+const boundedLevenshtein = (a: string, b: string, max: number): number => {
+  const al = a.length;
+  const bl = b.length;
+  if (Math.abs(al - bl) > max) return max + 1;
+  let prev = new Array<number>(bl + 1);
+  let curr = new Array<number>(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    curr[0] = i;
+    let rowMin = curr[0];
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      if (curr[j] < rowMin) rowMin = curr[j];
+    }
+    if (rowMin > max) return max + 1;
+    [prev, curr] = [curr, prev];
+  }
+  return prev[bl]!;
+};
+
+/** Best fuzzy window: slide a query-length window over the stripped page text,
+ *  anchoring on the query's first token to keep it cheap, and return the start
+ *  index of the lowest-distance window within tolerance (or -1). */
+const fuzzyFind = (
+  haystack: string,
+  needle: string,
+  maxDistance: number,
+): number => {
+  const len = needle.length;
+  if (len === 0) return -1;
+  const anchor = needle.slice(0, Math.min(8, len));
+  let best = -1;
+  let bestDist = maxDistance + 1;
+  let from = 0;
+  // Probe near every occurrence of the anchor, plus a small slop window.
+  while (true) {
+    const at = haystack.indexOf(anchor, from);
+    if (at === -1) break;
+    for (let offset = -2; offset <= 2; offset++) {
+      const start = at + offset;
+      if (start < 0 || start + len > haystack.length) continue;
+      const window = haystack.slice(start, start + len);
+      const dist = boundedLevenshtein(needle, window, bestDist - 1);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = start;
+        if (dist === 0) return best;
+      }
+    }
+    from = at + 1;
+  }
+  return bestDist <= maxDistance ? best : -1;
+};
+
+/**
+ * The result of {@link getTextPosition}.
+ *
+ * @category Type
+ */
+export interface TextPositionMatch {
+  /** Scaled position of the matched text, ready to use as a highlight position. */
+  position: ScaledPosition;
+  /** 1-indexed page the match was found on. */
+  pageNumber: number;
+  /** The exact document text that was matched. */
+  matchedText: string;
+  /** "exact" = whitespace-insensitive verbatim, "fuzzy" = approximate match. */
+  confidence: "exact" | "fuzzy";
+}
+
+interface RawTextItem {
+  text: string;
+  rect: LTWHP;
+}
+
+/** Build per-character rects for a raw [start,end) range over concatenated items,
+ *  splitting partial items proportionally and merging rects on the same line. */
+const rectsForRange = (
+  items: RawTextItem[],
+  itemStarts: number[],
+  start: number,
+  end: number,
+  pageNumber: number,
+): LTWHP[] => {
+  const rects: LTWHP[] = [];
+  for (let k = 0; k < items.length; k++) {
+    const itemStart = itemStarts[k]!;
+    const item = items[k]!;
+    const len = item.text.length;
+    if (len === 0) continue;
+    const itemEnd = itemStart + len;
+    const a = Math.max(start, itemStart);
+    const b = Math.min(end, itemEnd);
+    if (b <= a) continue;
+    const { left, top, width, height } = item.rect;
+    if (!(width > 0) || !(height > 0)) continue;
+    const s = (a - itemStart) / len;
+    const e = (b - itemStart) / len;
+    rects.push({
+      left: left + s * width,
+      top,
+      width: (e - s) * width,
+      height,
+      pageNumber,
+    });
+  }
+  // Merge rects that sit on the same line and are horizontally contiguous.
+  rects.sort((p, q) => p.top - q.top || p.left - q.left);
+  const merged: LTWHP[] = [];
+  for (const r of rects) {
+    const last = merged[merged.length - 1];
+    if (
+      last &&
+      Math.abs(last.top - r.top) < Math.max(2, r.height * 0.4) &&
+      r.left - (last.left + last.width) < Math.max(4, r.height * 0.6)
+    ) {
+      const right = Math.max(last.left + last.width, r.left + r.width);
+      last.left = Math.min(last.left, r.left);
+      last.width = right - last.left;
+      last.height = Math.max(last.height, r.height);
+    } else {
+      merged.push({ ...r });
+    }
+  }
+  return merged;
+};
+
+/**
+ * Locate a piece of text in the PDF and return its precise position — the rects
+ * of the exact phrase (sub-item, per-line), not a whole sentence. Use it to turn
+ * an external quote / citation into a highlight you can render or scroll to.
+ *
+ * Robust to PDF quirks: matching ignores whitespace (so line-wraps and spacing
+ * differences don't matter) and falls back to bounded fuzzy matching for minor
+ * differences (hyphenation, OCR, slight paraphrase). Returns the first match
+ * (optionally restrict the page range), or null.
+ *
+ * @category Utility
+ */
+export const getTextPosition = async (
+  pdfDocument: PDFDocumentProxy,
+  query: string,
+  options: { pages?: "all" | number[]; fuzzy?: boolean } = {},
+): Promise<TextPositionMatch | null> => {
+  const { stripped: needle } = stripWhitespaceWithMap(query);
+  if (!needle) return null;
+  const allowFuzzy = options.fuzzy ?? true;
+  const maxDistance = Math.max(2, Math.floor(needle.length * 0.15));
+
+  const pages = await extractPageTextItems(pdfDocument, {
+    pages: options.pages ?? "all",
+  });
+
+  for (const page of pages) {
+    const items: RawTextItem[] = page.textItems
+      .filter((it) => it.text)
+      .map((it) => ({ text: it.text, rect: it.rect }));
+    if (items.length === 0) continue;
+
+    // Raw concatenation + per-item start offsets (no inserted separators).
+    const itemStarts: number[] = [];
+    let raw = "";
+    for (const it of items) {
+      itemStarts.push(raw.length);
+      raw += it.text;
+    }
+
+    const { stripped, map } = stripWhitespaceWithMap(raw);
+    let at = stripped.indexOf(needle);
+    let confidence: "exact" | "fuzzy" = "exact";
+    if (at === -1 && allowFuzzy) {
+      at = fuzzyFind(stripped, needle, maxDistance);
+      confidence = "fuzzy";
+    }
+    if (at === -1) continue;
+
+    const rawStart = map[at]!;
+    const rawEnd = map[Math.min(at + needle.length - 1, map.length - 1)]! + 1;
+    const rects = rectsForRange(
+      items,
+      itemStarts,
+      rawStart,
+      rawEnd,
+      page.pageNumber,
+    );
+    if (rects.length === 0) continue;
+
+    const boundingRect = getBoundingRect(rects);
+    return {
+      position: {
+        boundingRect: viewportToScaled(boundingRect, page),
+        rects: rects.map((r) => viewportToScaled(r, page)),
+      },
+      pageNumber: page.pageNumber,
+      matchedText: raw.slice(rawStart, rawEnd),
+      confidence,
+    };
+  }
+
+  return null;
+};

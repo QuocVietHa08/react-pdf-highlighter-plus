@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## OpenWiki
+
+This repository has documentation located in the /openwiki directory.
+
+Start here:
+- [OpenWiki quickstart](openwiki/quickstart.md)
+
+OpenWiki includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+
+When working in this repository, read the OpenWiki quickstart first, then follow its links to the relevant architecture, workflow, domain, operation, and testing notes.
+
 ## Project Overview
 
 `react-pdf-highlighter-extended` is a React library for annotating PDF documents with text and area highlights. It's built on top of PDF.js and provides a highly customizable highlighting experience with viewport-independent position data.

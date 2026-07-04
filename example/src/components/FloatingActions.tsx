@@ -14,7 +14,6 @@ import {
   RectangleHorizontal,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Slider } from "./ui/slider";
 import {
   Tooltip,
   TooltipContent,
@@ -38,28 +37,10 @@ interface FloatingActionsProps {
   onAddSignature: () => void;
   drawingMode: boolean;
   onToggleDrawingMode: () => void;
-  drawingStrokeColor: string;
-  onDrawingColorChange: (color: string) => void;
-  drawingStrokeWidth: number;
-  onDrawingWidthChange: (width: number) => void;
   // Shape mode props
   shapeMode: ShapeType | null;
   onSetShapeMode: (mode: ShapeType | null) => void;
-  shapeStrokeColor: string;
-  onShapeColorChange: (color: string) => void;
-  shapeStrokeWidth: number;
-  onShapeWidthChange: (width: number) => void;
 }
-
-const colorOptions = [
-  "#000000",
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#3b82f6",
-  "#8b5cf6",
-];
 
 export function FloatingActions({
   highlightPen,
@@ -74,16 +55,8 @@ export function FloatingActions({
   onAddSignature,
   drawingMode,
   onToggleDrawingMode,
-  drawingStrokeColor,
-  onDrawingColorChange,
-  drawingStrokeWidth,
-  onDrawingWidthChange,
   shapeMode,
   onSetShapeMode,
-  shapeStrokeColor,
-  onShapeColorChange,
-  shapeStrokeWidth,
-  onShapeWidthChange,
 }: FloatingActionsProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -92,127 +65,9 @@ export function FloatingActions({
   return (
     <TooltipProvider>
       <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse items-end gap-3">
-        {/* Drawing options panel - shown when drawing mode is active */}
-        {drawingMode && (
-          <div className="mb-2 rounded-lg border bg-background p-3 shadow-lg">
-            <div className="space-y-3">
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Color
-                </p>
-                <div className="flex gap-1">
-                  {colorOptions.map((color) => (
-                    <button
-                      key={color}
-                      className={cn(
-                        "h-6 w-6 rounded-full border-2 transition-transform hover:scale-110",
-                        drawingStrokeColor === color
-                          ? "border-primary"
-                          : "border-transparent"
-                      )}
-                      style={{ backgroundColor: color }}
-                      onClick={() => onDrawingColorChange(color)}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Width: {drawingStrokeWidth}px
-                </p>
-                <Slider
-                  value={[drawingStrokeWidth]}
-                  onValueChange={([value]) => onDrawingWidthChange(value)}
-                  min={1}
-                  max={10}
-                  step={1}
-                  className="w-40"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Shape options panel - shown when shape mode is active */}
-        {shapeMode && (
-          <div className="mb-2 rounded-lg border bg-background p-3 shadow-lg">
-            <div className="space-y-3">
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Shape: {shapeMode.charAt(0).toUpperCase() + shapeMode.slice(1)}
-                </p>
-                <div className="flex gap-1">
-                  <button
-                    className={cn(
-                      "h-8 w-8 rounded border-2 flex items-center justify-center transition-transform hover:scale-110",
-                      shapeMode === "rectangle"
-                        ? "border-primary bg-primary/10"
-                        : "border-transparent"
-                    )}
-                    onClick={() => onSetShapeMode("rectangle")}
-                  >
-                    <RectangleHorizontal className="h-4 w-4" />
-                  </button>
-                  <button
-                    className={cn(
-                      "h-8 w-8 rounded border-2 flex items-center justify-center transition-transform hover:scale-110",
-                      shapeMode === "circle"
-                        ? "border-primary bg-primary/10"
-                        : "border-transparent"
-                    )}
-                    onClick={() => onSetShapeMode("circle")}
-                  >
-                    <Circle className="h-4 w-4" />
-                  </button>
-                  <button
-                    className={cn(
-                      "h-8 w-8 rounded border-2 flex items-center justify-center transition-transform hover:scale-110",
-                      shapeMode === "arrow"
-                        ? "border-primary bg-primary/10"
-                        : "border-transparent"
-                    )}
-                    onClick={() => onSetShapeMode("arrow")}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Color
-                </p>
-                <div className="flex gap-1">
-                  {colorOptions.map((color) => (
-                    <button
-                      key={color}
-                      className={cn(
-                        "h-6 w-6 rounded-full border-2 transition-transform hover:scale-110",
-                        shapeStrokeColor === color
-                          ? "border-primary"
-                          : "border-transparent"
-                      )}
-                      style={{ backgroundColor: color }}
-                      onClick={() => onShapeColorChange(color)}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">
-                  Width: {shapeStrokeWidth}px
-                </p>
-                <Slider
-                  value={[shapeStrokeWidth]}
-                  onValueChange={([value]) => onShapeWidthChange(value)}
-                  min={1}
-                  max={6}
-                  step={1}
-                  className="w-40"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Colour & width are no longer configured up-front: draw or place a
+            shape, then adjust it from the highlight's own toolbar. So there's
+            no options panel here — just the tool buttons below. */}
 
         {/* Action buttons - shown when FAB is open */}
         {isOpen && (
@@ -338,10 +193,7 @@ export function FloatingActions({
                   variant={drawingMode ? "default" : "outline"}
                   size="icon"
                   className="h-12 w-12 rounded-full shadow-md"
-                  onClick={() => {
-                    onToggleDrawingMode();
-                    if (!drawingMode) setIsOpen(false);
-                  }}
+                  onClick={onToggleDrawingMode}
                 >
                   <Pencil className="h-5 w-5" />
                 </Button>
@@ -358,10 +210,9 @@ export function FloatingActions({
                   variant={shapeMode === "rectangle" ? "default" : "outline"}
                   size="icon"
                   className="h-12 w-12 rounded-full shadow-md"
-                  onClick={() => {
-                    onSetShapeMode(shapeMode === "rectangle" ? null : "rectangle");
-                    if (shapeMode !== "rectangle") setIsOpen(false);
-                  }}
+                  onClick={() =>
+                    onSetShapeMode(shapeMode === "rectangle" ? null : "rectangle")
+                  }
                 >
                   <RectangleHorizontal className="h-5 w-5" />
                 </Button>
@@ -378,10 +229,9 @@ export function FloatingActions({
                   variant={shapeMode === "circle" ? "default" : "outline"}
                   size="icon"
                   className="h-12 w-12 rounded-full shadow-md"
-                  onClick={() => {
-                    onSetShapeMode(shapeMode === "circle" ? null : "circle");
-                    if (shapeMode !== "circle") setIsOpen(false);
-                  }}
+                  onClick={() =>
+                    onSetShapeMode(shapeMode === "circle" ? null : "circle")
+                  }
                 >
                   <Circle className="h-5 w-5" />
                 </Button>
@@ -398,10 +248,9 @@ export function FloatingActions({
                   variant={shapeMode === "arrow" ? "default" : "outline"}
                   size="icon"
                   className="h-12 w-12 rounded-full shadow-md"
-                  onClick={() => {
-                    onSetShapeMode(shapeMode === "arrow" ? null : "arrow");
-                    if (shapeMode !== "arrow") setIsOpen(false);
-                  }}
+                  onClick={() =>
+                    onSetShapeMode(shapeMode === "arrow" ? null : "arrow")
+                  }
                 >
                   <ArrowRight className="h-5 w-5" />
                 </Button>

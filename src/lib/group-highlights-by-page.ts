@@ -11,9 +11,16 @@ const groupHighlightsByPage = (
     if (!highlight) {
       return acc;
     }
+    // Deduplicated: a highlight whose rects all sit on the same page (the
+    // overwhelming common case) previously produced one pageNumber entry per
+    // rect plus one for boundingRect, all equal — pushing the SAME highlight
+    // into that page's array that many times over and rendering it as that
+    // many stacked, overlapping DOM copies.
     const pageNumbers = [
-      highlight.position.boundingRect.pageNumber,
-      ...highlight.position.rects.map((rect) => rect.pageNumber || 0),
+      ...new Set([
+        highlight.position.boundingRect.pageNumber,
+        ...highlight.position.rects.map((rect) => rect.pageNumber || 0),
+      ]),
     ];
 
     pageNumbers.forEach((pageNumber) => {

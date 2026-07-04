@@ -85,6 +85,12 @@ export const DrawingCanvas = ({
   const isDrawingRef = useRef(false);
   const [pageNumber, setPageNumber] = useState<number | null>(null);
   const [pageElement, setPageElement] = useState<HTMLElement | null>(null);
+  // Drawing commits when the user finishes (leaves drawing mode → this unmounts)
+  // rather than via a Done button. `cancelledRef` marks an Escape-discard so the
+  // unmount handler skips committing; `commitRef` always points at the latest
+  // commit closure so the unmount cleanup sees the newest strokes.
+  const cancelledRef = useRef(false);
+  const commitRef = useRef<() => void>(() => {});
 
   // Find which page the user is drawing on
   const findPageFromPoint = useCallback(
@@ -279,6 +285,7 @@ export const DrawingCanvas = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === "Escape") {
         console.log("DrawingCanvas: Cancelled via Escape");
+        cancelledRef.current = true;
         onCancel();
       }
     };
@@ -287,20 +294,12 @@ export const DrawingCanvas = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isActive, onCancel]);
 
-  // Clear drawing
-  const handleClear = () => {
-    console.log("DrawingCanvas: Cleared strokes");
-    setStrokes([]);
-    setCurrentStroke(null);
-    setPageNumber(null);
-    setPageElement(null);
-  };
-
-  // Complete drawing
-  const handleDone = () => {
+  // Commit the drawing as a highlight. Called on unmount (i.e. when the user
+  // leaves drawing mode) rather than from a button — no-op when there's nothing
+  // to save. Does NOT reset state: the component is unmounting anyway.
+  const commitDrawing = () => {
     if (strokes.length === 0 || pageNumber === null || !pageElement || !viewer) {
       console.log("DrawingCanvas: No strokes to save");
-      onCancel();
       return;
     }
 
@@ -340,7 +339,6 @@ export const DrawingCanvas = ({
 
     if (!outputCtx) {
       console.error("DrawingCanvas: Could not get output canvas context");
-      onCancel();
       return;
     }
 
@@ -388,57 +386,39 @@ export const DrawingCanvas = ({
 
     console.log("DrawingCanvas: Created drawing at position", scaledPosition);
     onComplete(dataUrl, scaledPosition, normalizedStrokes);
-
-    // Reset state
-    setStrokes([]);
-    setCurrentStroke(null);
-    setPageNumber(null);
-    setPageElement(null);
   };
+
+  // Keep commitRef pointed at the latest closure (which sees the current
+  // strokes), so the unmount cleanup below commits the newest drawing.
+  commitRef.current = commitDrawing;
+
+  // Commit on unmount = "finish". Leaving drawing mode unmounts this component;
+  // if it wasn't an Escape-cancel, save whatever was drawn. Colour and width are
+  // adjusted afterwards on the highlight itself, so there's no pre-draw panel.
+  useEffect(() => {
+    return () => {
+      if (!cancelledRef.current) commitRef.current();
+    };
+  }, []);
 
   if (!isActive) return null;
 
   return (
-    <>
-      <canvas
-        ref={canvasRef}
-        className="DrawingCanvas"
-        style={{
-          width: pageElement ? pageElement.getBoundingClientRect().width : "100%",
-          height: pageElement ? pageElement.getBoundingClientRect().height : "100%",
-          position: "fixed",
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      />
-      <div className="DrawingCanvas__controls">
-        <button
-          type="button"
-          className="DrawingCanvas__clearButton"
-          onClick={handleClear}
-        >
-          Clear
-        </button>
-        <button
-          type="button"
-          className="DrawingCanvas__cancelButton"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="DrawingCanvas__doneButton"
-          onClick={handleDone}
-        >
-          Done
-        </button>
-      </div>
-    </>
+    <canvas
+      ref={canvasRef}
+      className="DrawingCanvas"
+      style={{
+        width: pageElement ? pageElement.getBoundingClientRect().width : "100%",
+        height: pageElement ? pageElement.getBoundingClientRect().height : "100%",
+        position: "fixed",
+      }}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    />
   );
 };

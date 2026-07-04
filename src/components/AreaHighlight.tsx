@@ -2,12 +2,14 @@ import React, {
   CSSProperties,
   MouseEvent,
   ReactNode,
+  memo,
   useState,
   useRef,
   useEffect,
   useLayoutEffect,
 } from "react";
 import { createPortal } from "react-dom";
+import { Check, ChevronDown, Copy, Trash2 } from "lucide-react";
 
 import {
   copyTextToClipboard,
@@ -94,11 +96,6 @@ export interface AreaHighlightProps {
   onDelete?(): void;
 
   /**
-   * Custom style icon. Replaces the default palette icon.
-   */
-  styleIcon?: ReactNode;
-
-  /**
    * Custom delete icon. Replaces the default trash icon.
    */
   deleteIcon?: ReactNode;
@@ -108,32 +105,29 @@ export interface AreaHighlightProps {
    * Default: ["rgba(255, 226, 143, 1)", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"]
    */
   colorPresets?: string[];
+
+  /**
+   * Extra buttons rendered in the same toolbar row, after the copy button.
+   * Use this to add consumer-defined actions (e.g. a comment toggle) without
+   * needing a second, separate popup.
+   */
+  extraButtons?: ReactNode;
+
+  /**
+   * Extra content rendered below the toolbar row, in the same slot as the
+   * built-in style panel (e.g. a comment editor opened by an extraButtons
+   * toggle).
+   */
+  extraPanel?: ReactNode;
 }
 
-// Default icons
-const DefaultStyleIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-  </svg>
-);
-
-const DefaultDeleteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
-
-const DefaultCopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
-  </svg>
-);
-
-const DefaultCopiedIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-  </svg>
-);
+// Default icons — lucide-react, so the toolbar matches the example app's
+// icon vocabulary instead of a separate hand-drawn set.
+const DefaultDeleteIcon = () => <Trash2 width={14} height={14} />;
+const DefaultCopyIcon = () => <Copy width={14} height={14} />;
+const DefaultCopiedIcon = () => <Check width={14} height={14} strokeWidth={2.5} />;
+const ChevronDownIcon = () => <ChevronDown width={12} height={12} strokeWidth={2.5} />;
+const CheckIcon = () => <Check width={14} height={14} strokeWidth={2.5} />;
 
 // Default color presets
 const DEFAULT_COLOR_PRESETS = [
@@ -144,12 +138,22 @@ const DEFAULT_COLOR_PRESETS = [
   "#e1bee7", // Light purple
 ];
 
+// Display names for the default presets, used in the color dropdown. A
+// custom preset (not in this map) just falls back to showing its own value.
+const COLOR_NAMES: Record<string, string> = {
+  "rgba(255, 226, 143, 1)": "Yellow",
+  "#ffcdd2": "Red",
+  "#c8e6c9": "Green",
+  "#bbdefb": "Blue",
+  "#e1bee7": "Purple",
+};
+
 /**
  * Renders a resizeable and interactive rectangular area for a highlight.
  *
  * @category Component
  */
-export const AreaHighlight = ({
+export const AreaHighlight = memo(({
   highlight,
   onChange,
   isScrolledTo,
@@ -160,24 +164,57 @@ export const AreaHighlight = ({
   highlightColor = "rgba(255, 226, 143, 1)",
   onStyleChange,
   onDelete,
-  styleIcon,
   deleteIcon,
   copyText,
   colorPresets = DEFAULT_COLOR_PRESETS,
+  extraButtons,
+  extraPanel,
 }: AreaHighlightProps) => {
-  const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
-  const stylePanelRef = useRef<HTMLDivElement>(null);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
   const copyResetTimeoutRef = useRef<number | null>(null);
 
+  // Deselect on click outside / Escape (selection interaction model).
+  // The toolbar is portaled outside the root, so clicks inside it must
+  // also count as "inside".
+  useEffect(() => {
+    if (!isSelected) return;
+    const handlePointerDown = (e: globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      const insideRoot = containerRef.current?.contains(target);
+      const insideToolbar = toolbarWrapperRef.current?.contains(target);
+      if (!insideRoot && !insideToolbar) {
+        setIsSelected(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSelected(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isSelected]);
+
+  // Resolve on every commit — a run-once effect can catch the text layer
+  // before pdf.js attaches it to .page, leaving configLayer null forever.
   useLayoutEffect(() => {
     if (containerRef.current) {
-      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+      const layer = findOrCreateHighlightConfigLayer(containerRef.current);
+      setConfigLayer((prev) => (prev === layer ? prev : layer));
     }
-  }, []);
+  });
 
   useEffect(() => {
     return () => {
@@ -187,16 +224,16 @@ export const AreaHighlight = ({
     };
   }, []);
 
-  // Close style panel when clicking outside
+  // Close color menu when clicking outside
   useEffect(() => {
-    if (!isStylePanelOpen) return;
+    if (!isColorMenuOpen) return;
 
     const handleClickOutside = (e: globalThis.MouseEvent) => {
       if (
-        stylePanelRef.current &&
-        !stylePanelRef.current.contains(e.target as Node)
+        colorMenuRef.current &&
+        !colorMenuRef.current.contains(e.target as Node)
       ) {
-        setIsStylePanelOpen(false);
+        setIsColorMenuOpen(false);
       }
     };
 
@@ -209,9 +246,15 @@ export const AreaHighlight = ({
       clearTimeout(timeoutId);
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isStylePanelOpen]);
+  }, [isColorMenuOpen]);
 
   const highlightClass = isScrolledTo ? "AreaHighlight--scrolledTo" : "";
+  const selectedClass = isSelected ? "AreaHighlight--selected" : "";
+
+  // Not enough room above the box for the toolbar (e.g. the highlight sits
+  // at the very top of the page) — flip it below instead of letting it
+  // float up over whatever page content is above the box.
+  const flipToolbar = highlight.position.boundingRect.top < 40;
 
   // Generate key based on position. This forces a remount (and a defaultpos update)
   // whenever highlight position changes (e.g., when updated, scale changes, etc.)
@@ -255,7 +298,7 @@ export const AreaHighlight = ({
 
   return (
     <div
-      className={`AreaHighlight ${highlightClass}`}
+      className={`AreaHighlight ${highlightClass} ${selectedClass}`}
       onContextMenu={onContextMenu}
       ref={containerRef}
     >
@@ -263,30 +306,40 @@ export const AreaHighlight = ({
         createPortal(
         <div
           className="AreaHighlight__toolbar-wrapper"
+          ref={toolbarWrapperRef}
           style={{
             position: "absolute",
             left: highlight.position.boundingRect.left,
-            top: highlight.position.boundingRect.top - 28,
-            paddingBottom: 12,
+            top: highlight.position.boundingRect.top,
           }}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
         >
           <div
-            className={`AreaHighlight__toolbar ${isHovered || isScrolledTo || isStylePanelOpen ? "AreaHighlight__toolbar--visible" : ""}`}
+            className={`AreaHighlight__toolbar ${flipToolbar ? "AreaHighlight__toolbar--below" : ""} ${isSelected || isScrolledTo || isColorMenuOpen ? "AreaHighlight__toolbar--visible" : ""}`}
           >
             {onStyleChange && (
-              <button
-                className="AreaHighlight__style-button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsStylePanelOpen(!isStylePanelOpen);
-                }}
-                title="Change color"
-                type="button"
-              >
-                {styleIcon || <DefaultStyleIcon />}
-              </button>
+              <>
+                {/* Color as a dropdown (swatch + chevron) instead of a row of
+                    dots — gives each preset room for a name and a checkmark
+                    on the active one, and keeps the toolbar itself compact. */}
+                <button
+                  type="button"
+                  className="AreaHighlight__color-trigger"
+                  aria-label="Highlight color"
+                  aria-expanded={isColorMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsColorMenuOpen((v) => !v);
+                  }}
+                  title="Highlight color"
+                >
+                  <span
+                    className="AreaHighlight__color-trigger-dot"
+                    style={{ backgroundColor: highlightColor }}
+                  />
+                  <ChevronDownIcon />
+                </button>
+                <div className="AreaHighlight__toolbar-divider" />
+              </>
             )}
             <button
               className="AreaHighlight__copy-button"
@@ -296,6 +349,7 @@ export const AreaHighlight = ({
             >
               {isCopied ? <DefaultCopiedIcon /> : <DefaultCopyIcon />}
             </button>
+            {extraButtons}
             {onDelete && (
               <button
                 className="AreaHighlight__delete-button"
@@ -311,46 +365,46 @@ export const AreaHighlight = ({
             )}
           </div>
 
-          {/* Style Panel - inside wrapper */}
-          {isStylePanelOpen && onStyleChange && (
+          {/* Color dropdown - inside wrapper */}
+          {isColorMenuOpen && onStyleChange && (
             <div
-              className="AreaHighlight__style-panel"
-              ref={stylePanelRef}
+              className="AreaHighlight__color-menu"
+              ref={colorMenuRef}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="AreaHighlight__style-row">
-                <label>Color</label>
-                <div className="AreaHighlight__color-options">
-                  <div className="AreaHighlight__color-presets">
-                    {colorPresets.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className={`AreaHighlight__color-preset ${highlightColor === c ? "active" : ""}`}
-                        style={{ backgroundColor: c }}
-                        onClick={() => onStyleChange({ highlightColor: c })}
-                        title={c}
-                      />
-                    ))}
-                  </div>
-                  <input
-                    type="color"
-                    value={highlightColor}
-                    onChange={(e) => {
-                      onStyleChange({ highlightColor: e.target.value });
-                    }}
+              {colorPresets.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="AreaHighlight__color-menu-item"
+                  onClick={() => {
+                    onStyleChange({ highlightColor: c });
+                    setIsColorMenuOpen(false);
+                  }}
+                >
+                  <span
+                    className="AreaHighlight__color-menu-dot"
+                    style={{ backgroundColor: c }}
                   />
-                </div>
-              </div>
+                  <span className="AreaHighlight__color-menu-label">
+                    {COLOR_NAMES[c] || c}
+                  </span>
+                  {highlightColor === c && (
+                    <span className="AreaHighlight__color-menu-check">
+                      <CheckIcon />
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
           )}
+
+          {extraPanel}
         </div>,
           configLayer,
         )}
 
       <Rnd
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className="AreaHighlight__part"
         onDragStop={(_, data) => {
           const boundingRect: LTWHP = {
@@ -372,7 +426,10 @@ export const AreaHighlight = ({
 
           onChange && onChange(boundingRect);
         }}
-        onDragStart={onEditStart}
+        onDragStart={() => {
+          setIsSelected(true);
+          onEditStart?.();
+        }}
         onResizeStart={onEditStart}
         default={{
           x: highlight.position.boundingRect.left,
@@ -382,13 +439,17 @@ export const AreaHighlight = ({
         }}
         key={key}
         bounds={bounds}
-        // Prevevent any event clicks as clicking is already used for movement
+        // Prevevent any event clicks as clicking is already used for movement.
+        // A click still selects the highlight (shows the toolbar).
         onClick={(event: Event) => {
           event.stopPropagation();
           event.preventDefault();
+          setIsSelected(true);
         }}
         style={mergedStyle}
       />
     </div>
   );
-};
+});
+
+AreaHighlight.displayName = "AreaHighlight";

@@ -47,6 +47,16 @@ export const MouseMonitor = ({
   const onMouseMove = (event: MouseEvent) => {
     if (!containerRef.current) return;
 
+    // If something inside (e.g. a comment textarea being edited) has focus,
+    // never treat the mouse as "away". Content that grows/shrinks under an
+    // active edit (long comment, expanding color row, etc.) reflows the
+    // bounding box, and the cursor can end up outside it on the very next
+    // mousemove despite the user never having moved away — that shouldn't
+    // interrupt an in-progress edit.
+    if (containerRef.current.contains(document.activeElement)) {
+      return;
+    }
+
     const { clientX, clientY } = event;
     const { left, top, width, height } =
       containerRef.current.getBoundingClientRect();

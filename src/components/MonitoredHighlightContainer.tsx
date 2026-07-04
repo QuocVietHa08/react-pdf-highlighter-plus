@@ -49,7 +49,8 @@ export const MonitoredHighlightContainer = ({
 }: MonitoredHighlightContainerProps) => {
   const mouseInRef = useRef(false); // Whether the mouse is over the child (highlight)
 
-  const { setTip, isEditingOrHighlighting } = usePdfHighlighterContext();
+  const { setTip, isEditingOrHighlighting, isHighlightSelected } =
+    usePdfHighlighterContext();
 
   return (
     <div
@@ -58,6 +59,8 @@ export const MonitoredHighlightContainer = ({
         onMouseEnter && onMouseEnter();
 
         if (isEditingOrHighlighting()) return;
+        // A selected highlight's toolbar owns the space above — no hover tip.
+        if (isHighlightSelected()) return;
 
         if (highlightTip) {
           // MouseMonitor the highlightTip to prevent it from disappearing if the mouse is over it and not the highlight.

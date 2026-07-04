@@ -13,21 +13,21 @@
 }
 
 .PdfHighlighter::-webkit-scrollbar-thumb {
-  background-color: #9f9f9f;
-  border-radius: 5px;
+  background-color: var(--rphp-border-strong, #b7b3ab);
+  border-radius: 999px;
 }
 
 .PdfHighlighter::-webkit-scrollbar-thumb:hover {
-  background-color: #d1d1d1;
+  background-color: var(--rphp-text-muted, #8b8880);
 }
 
 .PdfHighlighter::-webkit-scrollbar-track {
-  background-color: #2c2c2c;
-  border-radius: 5px;
+  background-color: transparent;
+  border-radius: 999px;
 }
 
 .PdfHighlighter::-webkit-scrollbar-track-piece {
-  background-color: #2c2c2c;
+  background-color: transparent;
 }
 
 .PdfHighlighter__tip-container {
@@ -39,11 +39,17 @@
   position: absolute;
   inset: 0;
   z-index: 4;
+  /* Lives in .page as a sibling of .textLayer, not nested inside it — that
+     would scope our z-index to .textLayer's own local stacking context,
+     putting pdf.js's .annotationLayer (a .page-level sibling of .textLayer,
+     z-index 3) above our highlights globally and silently swallowing
+     clicks. Multiply is set explicitly here instead of inherited from
+     .textLayer: it's what makes a Text/Area highlight's color tint still
+     show the black text underneath (like a real highlighter pen) instead
+     of covering it. Opaque annotation types (Image/Drawing/Freetext/Shape)
+     render in .PdfHighlighter__note-layer instead, with normal blending. */
+  mix-blend-mode: multiply;
   pointer-events: none;
-}
-
-.textLayer > .PdfHighlighter__highlight-layer {
-  z-index: 4;
 }
 
 .PdfHighlighter__note-layer {
@@ -128,17 +134,18 @@
    colored text. Highlight/note/config layers render normally — they sit on
    already-recolored pages, so no counter-inversion is needed. */
 
-/* Dark mode: give every highlight a persistent red border so they stay legible
-   against the recolored dark page (light mode keeps the ring on scrolled-to
-   only). :not(--scrolledTo) so the active highlight keeps its stronger double
-   ring (equal-specificity rules would otherwise clobber it by load order). */
+/* Dark mode: give every highlight a persistent accent border so they stay
+   legible against the recolored dark page (light mode keeps the ring on
+   scrolled-to only). :not(--scrolledTo) so the active highlight keeps its
+   stronger double ring (equal-specificity rules would otherwise clobber it by
+   load order). */
 .PdfHighlighter--dark
   .TextHighlight:not(.TextHighlight--scrolledTo)
   .TextHighlight__part,
 .PdfHighlighter--dark
   .AreaHighlight:not(.AreaHighlight--scrolledTo)
   .AreaHighlight__part {
-  box-shadow: 0 0 0 1px #ff4141;
+  box-shadow: 0 0 0 1px var(--rphp-accent, #7b71f0);
 }
 
 /* The text/highlight layer blends with the page canvas via `multiply`
@@ -153,6 +160,13 @@
   --hl-fill-alpha: 42%;
 }
 .PdfHighlighter--dark .textLayer {
+  mix-blend-mode: normal;
+}
+/* Our own highlight-layer sets multiply explicitly (it's a .page-level
+   sibling of .textLayer, not nested inside it — see PdfHighlighter__
+   highlight-layer above), so it needs this same dark-mode override in its
+   own right; it no longer inherits .textLayer's override through nesting. */
+.PdfHighlighter--dark .PdfHighlighter__highlight-layer {
   mix-blend-mode: normal;
 }
 

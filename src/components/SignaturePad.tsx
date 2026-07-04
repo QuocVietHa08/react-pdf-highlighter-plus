@@ -190,18 +190,68 @@ export const SignaturePad = ({
     }
   };
 
+  // Close on Escape while open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="SignaturePad__overlay" onClick={handleOverlayClick}>
-      <div className="SignaturePad__modal">
-        <h3 className="SignaturePad__title">Draw your signature</h3>
-        <canvas
-          ref={canvasRef}
-          className="SignaturePad__canvas"
-          width={width}
-          height={height}
-        />
+      <div
+        className="SignaturePad__modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signaturepad-title"
+      >
+        <div className="SignaturePad__header">
+          <div>
+            <h3 id="signaturepad-title" className="SignaturePad__title">
+              Add your signature
+            </h3>
+            <p className="SignaturePad__subtitle">
+              Draw with your mouse or finger
+            </p>
+          </div>
+          <button
+            type="button"
+            className="SignaturePad__close"
+            onClick={onClose}
+            aria-label="Close"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="SignaturePad__canvas-wrap">
+          <canvas
+            ref={canvasRef}
+            className="SignaturePad__canvas"
+            width={width}
+            height={height}
+          />
+          <div className="SignaturePad__baseline" aria-hidden="true">
+            <span className="SignaturePad__baseline-x">✕</span>
+          </div>
+        </div>
+
         <div className="SignaturePad__buttons">
           <button
             type="button"
@@ -210,20 +260,22 @@ export const SignaturePad = ({
           >
             Clear
           </button>
-          <button
-            type="button"
-            className="SignaturePad__button SignaturePad__button--cancel"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="SignaturePad__button SignaturePad__button--done"
-            onClick={handleDone}
-          >
-            Done
-          </button>
+          <div className="SignaturePad__buttons-right">
+            <button
+              type="button"
+              className="SignaturePad__button SignaturePad__button--cancel"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="SignaturePad__button SignaturePad__button--done"
+              onClick={handleDone}
+            >
+              Add signature
+            </button>
+          </div>
         </div>
       </div>
     </div>

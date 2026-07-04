@@ -65,7 +65,8 @@ let EventBus: typeof TEventBus, PDFFindController: typeof TPDFFindController, PD
 
 const SCROLL_MARGIN = 10;
 const DEFAULT_SCALE_VALUE = "auto";
-const DEFAULT_TEXT_SELECTION_COLOR = "rgba(153,193,218,255)";
+// Verso accent tint
+const DEFAULT_TEXT_SELECTION_COLOR = "rgba(216, 212, 250, 1)";
 
 /**
  * Theme configuration for PdfHighlighter styling.
@@ -137,14 +138,25 @@ const DEFAULT_DARK_MODE_COLORS = {
 
 // Unmount a per-page React root, deferred so it never runs synchronously inside
 // a React render/commit (which React warns about). Tolerates double-unmount.
-const unmountReactRoot = (root?: Root | null) => {
-  if (!root) return;
+// Also removes the container element itself once unmounted — leaving an
+// empty-but-still-attached div behind isn't harmful on its own, but under
+// React 18 StrictMode's dev-only mount→unmount→remount cycle, the deferred
+// unmount can still be pending when the remount's effect runs and creates a
+// *second* layer via ensurePersistentLayer (which only checks its own ref,
+// not the live DOM, for an existing binding) — leaving two populated,
+// perfectly-overlapping layers rendering the same highlights until the
+// microtask catches up. Removing the container guarantees it can't
+// contribute stray content even if straggling.
+const unmountReactRoot = (binding?: { reactRoot: Root; container: Element } | null) => {
+  if (!binding) return;
+  const { reactRoot, container } = binding;
   queueMicrotask(() => {
     try {
-      root.unmount();
+      reactRoot.unmount();
     } catch {
       /* already unmounted */
     }
+    container.remove();
   });
 };
 
@@ -194,20 +206,21 @@ const patchPageRenderRecolor = (
     });
 };
 
+// Verso: warm paper chrome in light mode, warm near-black in dark.
 const defaultLightTheme: Required<PdfHighlighterTheme> = {
   mode: "light",
-  containerBackgroundColor: "#e5e5e5",
-  scrollbarThumbColor: "#9f9f9f",
-  scrollbarTrackColor: "#d1d1d1",
+  containerBackgroundColor: "#efece5",
+  scrollbarThumbColor: "#b7b3ab",
+  scrollbarTrackColor: "transparent",
   darkModeInvertIntensity: 0.9,
   darkModeColors: DEFAULT_DARK_MODE_COLORS,
 };
 
 const defaultDarkTheme: Required<PdfHighlighterTheme> = {
   mode: "dark",
-  containerBackgroundColor: "#3a3a3a",  // Lighter than PDF page for contrast
-  scrollbarThumbColor: "#6b6b6b",
-  scrollbarTrackColor: "#2c2c2c",
+  containerBackgroundColor: "#2a2724",  // Lighter than PDF page for contrast
+  scrollbarThumbColor: "#57544d",
+  scrollbarTrackColor: "transparent",
   darkModeInvertIntensity: 0.9,
   darkModeColors: DEFAULT_DARK_MODE_COLORS,
 };
@@ -230,6 +243,13 @@ const ensurePersistentLayer = (
 ): HighlightBindings => {
   let binding = bindings[pageNumber];
   if (!binding) {
+    // Defensive: under React 18 StrictMode's dev-only mount→unmount→remount
+    // cycle, a *previous* instance's layer can still be attached (its
+    // deferred unmount hasn't run yet) when this remount creates a fresh
+    // `bindings` ref and sees no binding for this page. Sweep any stray
+    // same-class siblings first so we never end up with two populated,
+    // perfectly-overlapping layers rendering the same highlights.
+    parent.querySelectorAll(`:scope > .${className}`).forEach((stray) => stray.remove());
     const doc = getDocument(parent);
     const layer = doc.createElement("div");
     layer.className = className;
@@ -249,8 +269,40 @@ const ensurePersistentLayer = (
   return binding;
 };
 
-const isFreetextHighlight = (highlight: Highlight | GhostHighlight) =>
-  "type" in highlight && highlight.type === "freetext";
+/**
+ * Guard against CSS injection: color props are interpolated into a <style>
+ * template literal, so a string like `red;}body{display:none}` would break out
+ * of its rule. CSS.supports validates every legal CSS color grammar and rejects
+ * anything containing `;`/`{`/`}` (those are never valid inside a color value).
+ * Falls back to the provided default when invalid or when CSS.supports is
+ * unavailable and the value isn't a simple hex/rgb/hsl form.
+ */
+const sanitizeCssColor = (value: string | undefined, fallback: string): string => {
+  if (!value) return fallback;
+  if (typeof CSS !== "undefined" && typeof CSS.supports === "function") {
+    return CSS.supports("color", value) ? value : fallback;
+  }
+  // Conservative fallback grammar (hex, rgb[a], hsl[a], simple names).
+  return /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\([\d.,%\s/]+\)|[a-z]{1,25})$/i.test(value)
+    ? value
+    : fallback;
+};
+
+// Highlight types whose default rendering needs a truly opaque background
+// (a photo, a signature/drawing stroke, a sticky note) rather than a
+// translucent color tint. These render in a layer OUTSIDE .textLayer, which
+// otherwise carries pdf.js's own mix-blend-mode: multiply — the very thing
+// Text/Area highlights want (it's what makes a yellow highlight still show
+// the black text underneath, like a real highlighter pen), but which makes
+// an "opaque" white background invisible (white is the neutral color under
+// multiply: white × page = page, unchanged) while darker content still
+// shows through, which is why a solid background alone doesn't fix it.
+const needsOpaqueLayer = (highlight: Highlight | GhostHighlight) =>
+  "type" in highlight &&
+  (highlight.type === "freetext" ||
+    highlight.type === "image" ||
+    highlight.type === "drawing" ||
+    highlight.type === "shape");
 
 const disableTextSelection = (viewer: InstanceType<typeof PDFViewer>, flag: boolean) => {
   viewer.viewer?.classList.toggle("PdfHighlighter--disable-selection", flag);
@@ -590,6 +642,10 @@ export const PdfHighlighter = ({
     }),
   );
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  // Last observed container size. Survives listener-effect re-runs so the
+  // fresh observer's mandatory initial callback can be told apart from a real
+  // resize (consumers passing inline props re-run that effect every render).
+  const lastContainerSizeRef = useRef<{ w: number; h: number } | null>(null);
   const renderRetryTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>(
     [],
   );
@@ -598,6 +654,9 @@ export const PdfHighlighter = ({
   );
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null);
   const viewerRef = useRef<InstanceType<typeof PDFViewer> | null>(null);
+  // Count of currently-selected highlights (toolbar open) — used to suppress
+  // hover tips while any toolbar is showing.
+  const selectedHighlightCountRef = useRef(0);
   // Last document the viewer ran setDocument for (to tell first load from a
   // toggle) and the last (document + recolor) key actually rendered. The key
   // dedupes StrictMode's double-invoke: without it, two overlapping async
@@ -713,13 +772,32 @@ export const PdfHighlighter = ({
   useLayoutEffect(() => {
     if (!containerNodeRef.current) return;
 
-    resizeObserverRef.current = new ResizeObserver(handleScaleValue);
+    // Re-apply the scale ONLY on real container size changes ("auto"/"page-
+    // width" must re-fit). ResizeObserver fires an initial callback on every
+    // observe() — and this effect re-binds whenever its deps change identity —
+    // so without the size check that initial callback force-set the scale
+    // after every consumer render (the second re-raster per zoom commit).
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect;
+      if (!rect) return;
+      const last = lastContainerSizeRef.current;
+      if (last && last.w === rect.width && last.h === rect.height) return;
+      lastContainerSizeRef.current = { w: rect.width, h: rect.height };
+      // Skip the very first measurement too — initial scale is applied by the
+      // pagesinit handler below, not by observation start.
+      if (last) handleScaleValueRef.current();
+    });
     resizeObserverRef.current.observe(containerNodeRef.current);
 
     const doc = containerNodeRef.current.ownerDocument;
 
-    eventBusRef.current.on("textlayerrendered", scheduleRenderHighlightLayers);
-    eventBusRef.current.on("pagerendered", scheduleRenderHighlightLayers);
+    // Page render events don't change highlight CONTENT — only the newly
+    // (re)built page needs painting. A stale-only pass skips every up-to-date
+    // page, so these per-page events stop re-rendering the whole document.
+    const handlePageRendered = () => renderHighlightLayers(true);
+
+    eventBusRef.current.on("textlayerrendered", handlePageRendered);
+    eventBusRef.current.on("pagerendered", handlePageRendered);
     eventBusRef.current.on("pagesinit", handleScaleValue);
     doc.addEventListener("keydown", handleKeyDown);
     doc.addEventListener("copy", handleCopy, true);
@@ -728,8 +806,8 @@ export const PdfHighlighter = ({
 
     return () => {
       eventBusRef.current.off("pagesinit", handleScaleValue);
-      eventBusRef.current.off("pagerendered", scheduleRenderHighlightLayers);
-      eventBusRef.current.off("textlayerrendered", scheduleRenderHighlightLayers);
+      eventBusRef.current.off("pagerendered", handlePageRendered);
+      eventBusRef.current.off("textlayerrendered", handlePageRendered);
       doc.removeEventListener("keydown", handleKeyDown);
       doc.removeEventListener("copy", handleCopy, true);
       resizeObserverRef.current?.disconnect();
@@ -748,9 +826,9 @@ export const PdfHighlighter = ({
   useEffect(() => {
     return () => {
       for (const binding of Object.values(highlightBindingsRef.current))
-        unmountReactRoot(binding?.reactRoot);
+        unmountReactRoot(binding);
       for (const binding of Object.values(noteBindingsRef.current))
-        unmountReactRoot(binding?.reactRoot);
+        unmountReactRoot(binding);
     };
   }, []);
 
@@ -852,7 +930,12 @@ export const PdfHighlighter = ({
 
     const MIN_SCALE = 0.25;
     const MAX_SCALE = 10;
-    const COMMIT_DELAY = 140; // ms of no wheel events before committing
+    // Ms of no wheel events before committing (one crisp re-raster). Mouse
+    // wheel notches often arrive 150–250ms apart, so anything shorter makes
+    // nearly EVERY notch commit — a full PDF.js re-raster per notch, which
+    // reads as terrible zoom performance. 280ms coalesces a notch train into
+    // one commit while trackpad pinches (dense event streams) are unaffected.
+    const COMMIT_DELAY = 280;
 
     // Live gesture state. originX/Y are the anchor in CONTENT coords (fixed for
     // the whole gesture); anchorX/Y are the same point relative to the container.
@@ -928,12 +1011,20 @@ export const PdfHighlighter = ({
         Math.max(MIN_SCALE, g.startScale * g.k),
       );
       const ratio = finalScale / g.startScale;
+      // No-op gesture (e.g. wheeling past the min/max clamp, or a pinch that
+      // returned to 1×): the preview transform is already cleared above, so
+      // skip the re-raster entirely — committing the SAME scale would still
+      // re-render every visible page for zero visual change.
+      if (Math.abs(ratio - 1) < 1e-3) return;
       // Re-raster once at the new scale, then anchor the scroll so the content
       // point under the gesture stays in place.
       viewer.currentScaleValue = String(finalScale);
       container.scrollLeft = g.originX * ratio - g.anchorX;
       container.scrollTop = g.originY * ratio - g.anchorY;
-      onZoomChangeRef.current?.(finalScale);
+      // Notify the consumer on the NEXT task: their setState re-renders the
+      // whole app, and doing that inside the commit frame piles React work on
+      // top of PDF.js's relayout — a visibly longer hitch.
+      setTimeout(() => onZoomChangeRef.current?.(finalScale), 0);
       console.log("[PdfHighlighter] pinch commit", {
         from: g.startScale,
         to: finalScale,
@@ -948,12 +1039,18 @@ export const PdfHighlighter = ({
     const handleWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return; // pinch / ctrl-scroll only
       e.preventDefault();
-      const rect = container.getBoundingClientRect();
-      const ax = e.clientX - rect.left;
-      const ay = e.clientY - rect.top;
-      if (!g.active && !begin(ax, ay)) return;
+      if (!g.active) {
+        // Anchor is fixed for the whole gesture, so the (layout-forcing)
+        // getBoundingClientRect read only happens here — not on every notch.
+        const rect = container.getBoundingClientRect();
+        if (!begin(e.clientX - rect.left, e.clientY - rect.top)) return;
+      }
+      // Normalise deltaMode: Firefox mouse wheels report lines (~±3), not
+      // pixels (~±100) — without this, zoom there barely moves per notch.
+      const delta =
+        e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY;
       // Exponential: each notch is a constant ratio. Up = zoom in.
-      g.k = clampK(g.k * Math.exp(-e.deltaY * 0.01));
+      g.k = clampK(g.k * Math.exp(-delta * 0.01));
       preview();
       scheduleCommit(); // wheel has no end event — commit after it stops
     };
@@ -1225,15 +1322,42 @@ export const PdfHighlighter = ({
   };
 
   const handleScaleValue = () => {
-    if (viewerRef.current) {
-      viewerRef.current.currentScaleValue = pdfScaleValue.toString();
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    // Skip when the viewer is already (within rounding noise) at the target
+    // scale. Without this, every pinch/wheel commit paid for a SECOND full
+    // re-raster: commit sets the exact scale (e.g. 1.5373), onZoomChange gives
+    // the consumer a rounded value (1.54) back via the pdfScaleValue prop, and
+    // re-applying that near-identical value re-rendered every visible page
+    // again — and without scroll anchoring, so the view could also shift.
+    const target = parseFloat(String(pdfScaleValue));
+    if (
+      !Number.isNaN(target) &&
+      Math.abs(viewer.currentScale - target) / target < 0.005
+    ) {
+      return;
     }
+    viewer.currentScaleValue = pdfScaleValue.toString();
   };
+  const handleScaleValueRef = useRef(handleScaleValue);
+  handleScaleValueRef.current = handleScaleValue;
+
+  // Apply pdfScaleValue when the PROP changes (zoom buttons, external zoom
+  // state). Previously this only worked by accident: consumers passing inline
+  // props re-ran the listener effect every render, whose fresh
+  // ResizeObserver.observe() fired an initial callback that re-applied the
+  // prop. That accident also caused the double-raster above — the observer is
+  // now guarded to real size changes, so the prop needs its own effect.
+  useEffect(() => {
+    handleScaleValueRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfScaleValue, isViewerReady]);
 
   // Render Highlight layers
   const renderHighlightLayer = (
     highlightBindings: HighlightBindings,
     pageNumber: number,
+    highlightsByPage: ReturnType<typeof groupHighlightsByPage>,
     shouldRenderHighlight?: (highlight: Highlight | GhostHighlight) => boolean,
   ) => {
     if (!viewerRef.current) return;
@@ -1241,10 +1365,7 @@ export const PdfHighlighter = ({
     highlightBindings.reactRoot.render(
       <PdfHighlighterContext.Provider value={pdfHighlighterUtils}>
         <HighlightLayer
-          highlightsByPage={groupHighlightsByPage([
-            ...highlightsRef.current,
-            ghostHighlightRef.current,
-          ])}
+          highlightsByPage={highlightsByPage}
           pageNumber={pageNumber}
           scrolledToHighlightId={scrolledToHighlightIdRef.current}
           viewer={viewerRef.current}
@@ -1256,8 +1377,27 @@ export const PdfHighlighter = ({
     );
   };
 
-  const renderHighlightLayers = () => {
+  /**
+   * Render pass version stamps. A full pass (content changed) bumps the version
+   * and renders every ready page. Retry passes render ONLY pages that missed
+   * the current version (their text layer appeared late), so the retry timers
+   * cost near-zero instead of re-rendering the whole document each tick.
+   */
+  const renderVersionRef = useRef(0);
+  const pageRenderedVersionRef = useRef<{ [page: number]: number }>({});
+
+  const renderHighlightLayers = (onlyStalePages = false) => {
     if (!viewerRef.current) return;
+
+    if (!onlyStalePages) renderVersionRef.current += 1;
+    const version = renderVersionRef.current;
+
+    // Group once per pass — this walks the full highlights array, and doing it
+    // per page made a selection O(pages × highlights).
+    const highlightsByPage = groupHighlightsByPage([
+      ...highlightsRef.current,
+      ghostHighlightRef.current,
+    ]);
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
       const { textLayer } = viewerRef.current!.getPageView(pageNumber - 1) || {};
@@ -1265,41 +1405,80 @@ export const PdfHighlighter = ({
 
       const textLayerDiv = textLayer.div; // textLayer.div for version >=3.0 and textLayer.textLayerDiv otherwise.
 
-      // Highlight layer lives inside the (volatile) text layer; reuse + re-attach
+      // Both layers live in the stable .page element — a sibling of the
+      // volatile text layer, not a child of it. Nesting inside .textLayer
+      // scopes our z-index to *its* local stacking context, which put
+      // pdf.js's .annotationLayer (z-index 3, a .page-level sibling of
+      // .textLayer at z-index 2) above our highlights globally, silently
+      // swallowing clicks meant for them. As a .page-level sibling instead,
+      // our z-index compares directly against .annotationLayer's, so clicks
+      // land correctly again.
+      const pageEl = textLayerDiv.closest(".page") as HTMLElement | null;
+      if (!pageEl) continue;
+
+      // A page whose text layer was rebuilt (zoom / unload+reload) must render
+      // even in a stale-only pass: viewport coords changed with the new layer.
+      const existingBinding = highlightBindingsRef.current[pageNumber];
+      const layerRebuilt =
+        !existingBinding || existingBinding.container.parentNode !== pageEl;
+
+      if (
+        onlyStalePages &&
+        !layerRebuilt &&
+        pageRenderedVersionRef.current[pageNumber] === version
+      ) {
+        continue; // Already reflects the current content at the current layout.
+      }
+
+      // Text/Area highlights get their own mix-blend-mode: multiply (set in
+      // CSS on this layer) so a highlight's color tint still shows the black
+      // text underneath, like a real highlighter pen, instead of covering
+      // it — the same effect pdf.js's own .textLayer relies on multiply for,
+      // just applied directly rather than via DOM nesting. Reuse + re-attach
       // the same element/root rather than recreating it, so PDF.js page
       // re-renders don't make React render into an emptied container.
       const highlightBindings = ensurePersistentLayer(
         highlightBindingsRef.current,
         pageNumber,
-        textLayerDiv,
+        pageEl,
         "PdfHighlighter__highlight-layer",
       );
       renderHighlightLayer(
         highlightBindings,
         pageNumber,
-        (highlight) => !isFreetextHighlight(highlight),
+        highlightsByPage,
+        (highlight) => !needsOpaqueLayer(highlight),
       );
 
-      // Note layer lives in the stable .page element.
-      const pageEl = textLayerDiv.closest(".page") as HTMLElement | null;
-      if (pageEl) {
+      // The opaque-annotation layer (Freetext/Image/Drawing/Shape) — these
+      // types need a truly opaque background (a photo, ink strokes, a
+      // sticky note), so it uses mix-blend-mode: normal instead.
+      {
         const noteBindings = ensurePersistentLayer(
           noteBindingsRef.current,
           pageNumber,
           pageEl,
           "PdfHighlighter__note-layer",
         );
-        renderHighlightLayer(noteBindings, pageNumber, isFreetextHighlight);
+        renderHighlightLayer(
+          noteBindings,
+          pageNumber,
+          highlightsByPage,
+          needsOpaqueLayer,
+        );
       }
+      pageRenderedVersionRef.current[pageNumber] = version;
     }
   };
 
   const scheduleRenderHighlightLayers = () => {
     renderHighlightLayers();
 
+    // Catch pages whose text layer wasn't ready yet. Stale-only passes skip
+    // every already-rendered page, so these timers are cheap checks now.
     renderRetryTimeoutsRef.current.forEach(clearTimeout);
-    renderRetryTimeoutsRef.current = [50, 150, 350, 750, 1200].map((delay) =>
-      setTimeout(renderHighlightLayers, delay),
+    renderRetryTimeoutsRef.current = [50, 250, 1200].map((delay) =>
+      setTimeout(() => renderHighlightLayers(true), delay),
     );
   };
 
@@ -1465,8 +1644,15 @@ export const PdfHighlighter = ({
     });
   };
 
-  const pdfHighlighterUtils: PdfHighlighterUtils = {
+  const latestUtils: PdfHighlighterUtils = {
     isEditingOrHighlighting,
+    setHighlightSelected: (selected: boolean) => {
+      selectedHighlightCountRef.current = Math.max(
+        0,
+        selectedHighlightCountRef.current + (selected ? 1 : -1),
+      );
+    },
+    isHighlightSelected: () => selectedHighlightCountRef.current > 0,
     getCurrentSelection: () => selectionRef.current,
     getGhostHighlight: () => ghostHighlightRef.current,
     removeGhostHighlight,
@@ -1559,6 +1745,24 @@ export const PdfHighlighter = ({
     },
   };
 
+  // The utils object above closes over fresh state every render, so its
+  // identity changes constantly — passed straight into the per-page context
+  // Providers (and utilsRef) that would defeat memoization and make consumers
+  // treat every render as a change. Expose a STABLE facade instead: created
+  // once, every method delegates to the latest implementation via a ref.
+  const latestUtilsRef = useRef(latestUtils);
+  latestUtilsRef.current = latestUtils;
+  const stableUtilsRef = useRef<PdfHighlighterUtils | null>(null);
+  if (!stableUtilsRef.current) {
+    const facade = {} as Record<string, unknown>;
+    for (const key of Object.keys(latestUtils) as (keyof PdfHighlighterUtils)[]) {
+      facade[key] = (...args: unknown[]) =>
+        (latestUtilsRef.current[key] as (...a: unknown[]) => unknown)(...args);
+    }
+    stableUtilsRef.current = facade as unknown as PdfHighlighterUtils;
+  }
+  const pdfHighlighterUtils = stableUtilsRef.current;
+
   // Only call utilsRef once when viewer is ready to prevent infinite re-render loop
   const utilsRefCalledRef = useRef(false);
   useEffect(() => {
@@ -1600,14 +1804,14 @@ export const PdfHighlighter = ({
         <style>
           {`
           .textLayer ::selection {
-            background: ${textSelectionColor};
+            background: ${sanitizeCssColor(textSelectionColor, DEFAULT_TEXT_SELECTION_COLOR)};
           }
           .PdfHighlighter::-webkit-scrollbar-thumb {
-            background-color: ${resolvedTheme.scrollbarThumbColor};
+            background-color: ${sanitizeCssColor(resolvedTheme.scrollbarThumbColor, "#9f9f9f")};
           }
           .PdfHighlighter::-webkit-scrollbar-track,
           .PdfHighlighter::-webkit-scrollbar-track-piece {
-            background-color: ${resolvedTheme.scrollbarTrackColor};
+            background-color: ${sanitizeCssColor(resolvedTheme.scrollbarTrackColor, "#d1d1d1")};
           }
         `}
         </style>

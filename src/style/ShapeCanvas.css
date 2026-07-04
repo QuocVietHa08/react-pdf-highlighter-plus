@@ -6,7 +6,7 @@
   height: 100%;
   cursor: crosshair;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(28, 27, 24, 0.1);
 }
 
 .ShapeCanvas__controls {
@@ -19,29 +19,35 @@
   align-items: center;
   gap: 12px;
   z-index: 1002;
+  font-family: var(--rphp-font);
 }
 
+/* Hint - dark ink pill */
 .ShapeCanvas__hint {
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
+  background: var(--rphp-text, #1c1b18);
+  color: #efece5;
   padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--rphp-radius, 9px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  font-size: 13px;
+  font-family: var(--rphp-font);
   white-space: nowrap;
 }
 
+/* Danger action */
 .ShapeCanvas__cancelButton {
-  padding: 8px 20px;
-  background: #f44336;
-  color: white;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--rphp-danger, #ef4444);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--rphp-radius, 9px);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--rphp-font);
   transition: background 0.2s;
 }
 
 .ShapeCanvas__cancelButton:hover {
-  background: #d32f2f;
+  background: rgba(239, 68, 68, 0.12);
 }

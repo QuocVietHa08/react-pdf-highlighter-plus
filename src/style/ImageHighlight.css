@@ -1,5 +1,6 @@
 .ImageHighlight {
   position: absolute;
+  font-family: var(--rphp-font);
 }
 
 .ImageHighlight__container {
@@ -7,49 +8,92 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: 4px;
+  border-radius: var(--rphp-radius, 9px);
   overflow: visible;
   transition: box-shadow 0.2s ease;
 }
 
 .ImageHighlight__container:hover {
-  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
 }
 
+/* Toolbar - dark ink pill floating ABOVE the image (never covers it).
+   Shown on hover or while the image is selected. */
 .ImageHighlight__toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--rphp-toolbar-bg, #1c1b18);
+  border-radius: var(--rphp-radius, 9px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
   position: absolute;
-  top: 4px;
-  left: 4px;
+  bottom: calc(100% + 6px);
+  left: 0;
   z-index: 10;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(2px);
+  white-space: nowrap;
 }
 
-.ImageHighlight__container:hover .ImageHighlight__toolbar,
+/* Hover bridge across the 6px gap between toolbar and image */
+.ImageHighlight__toolbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
+/* Flipped below the image — used when there's no room above (e.g. the
+   image sits at the very top of the page) so the toolbar doesn't float up
+   over whatever page content is above it. */
+.ImageHighlight__toolbar--below {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.ImageHighlight__toolbar--below::after {
+  top: auto;
+  bottom: 100%;
+}
+
+/* Toolbar shows on SELECT only (hover shows the comment popup instead —
+   revealing both on hover made them overlap). */
+.ImageHighlight--selected .ImageHighlight__toolbar,
 .ImageHighlight--scrolledTo .ImageHighlight__toolbar {
   opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* The whole image body drags */
+.ImageHighlight__container {
+  cursor: grab;
+}
+
+.ImageHighlight__container:active {
+  cursor: grabbing;
 }
 
 .ImageHighlight__drag-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   cursor: grab;
-  color: white;
-  border-radius: 3px;
-  transition: background 0.2s;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
 }
 
 .ImageHighlight__drag-handle:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 .ImageHighlight__drag-handle:active {
@@ -61,9 +105,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
+  /* Transparent, not a white matte: the image is object-fit:fill so an opaque
+     photo covers this box entirely (white never showed anyway), while a
+     transparent PNG — a signature — now reads as ink-only over the page, like
+     a shape highlight (arrow/rectangle) rather than a white card. */
+  background: transparent;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: var(--rphp-radius, 9px);
 }
 
 .ImageHighlight__image {
@@ -74,25 +122,49 @@
   user-select: none;
 }
 
-.ImageHighlight--scrolledTo .ImageHighlight__container {
-  box-shadow: 0 0 0 3px #ff4141, 2px 2px 8px rgba(0, 0, 0, 0.2);
+/* Selected: accent ring + the whole body is draggable */
+.ImageHighlight--selected .ImageHighlight__container {
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
 }
 
-.ImageHighlight__delete-button {
+.ImageHighlight--scrolledTo .ImageHighlight__container {
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25),
+    var(--rphp-shadow, 0 2px 8px rgba(28, 27, 24, 0.12));
+}
+
+.ImageHighlight__delete-button,
+.ImageHighlight__rotate-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: transparent;
   cursor: pointer;
-  color: white;
-  border-radius: 3px;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
   padding: 0;
-  transition: background 0.2s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .ImageHighlight__delete-button:hover {
-  background: rgba(255, 100, 100, 0.6);
+  background: rgba(239, 68, 68, 0.24);
+  color: #ff8a80;
+}
+
+.ImageHighlight__rotate-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.ImageHighlight__toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: rgba(255, 255, 255, 0.2);
 }

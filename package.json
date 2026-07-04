@@ -2,6 +2,9 @@
   "name": "react-pdf-highlighter-plus",
   "type": "module",
   "version": "1.2.0",
+  "sideEffects": [
+    "*.css"
+  ],
   "description": "Set of modern React components for PDF highlighting",
   "author": "Edward Ha <quocvietha08@gmail.com>",
   "license": "MIT",
@@ -55,14 +58,37 @@
     "build:copy-styles": "cp -r ./src/style ./dist/esm",
     "build:example": "(cd ./example && npm install && tsc && vite build && mkdir -p \"../public/\" && cp -r example-app ../public/)",
     "build:docs": "npx typedoc",
+    "test:size": "size-limit",
     "clean": "rm -rf dist public node_modules package-lock.json"
   },
+  "size-limit": [
+    {
+      "name": "core (import * — no exportPdf chunk)",
+      "path": "dist/esm/index.js",
+      "limit": "220 kB",
+      "ignore": [
+        "react",
+        "react-dom",
+        "pdfjs-dist"
+      ]
+    }
+  ],
   "peerDependencies": {
     "pdfjs-dist": "^4.4.168",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.14",
+    "lucide-react": "^0.559.0",
+    "pdf-lib": "^1.17.1",
+    "react-rnd": "^10.4.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QuocVietHa08/react-pdf-highlighter-plus"
+  },
+  "devDependencies": {
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -74,21 +100,11 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@tanstack/react-virtual": "^3.13.14",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lodash.debounce": "^4.0.8",
-    "lucide-react": "^0.559.0",
-    "pdf-lib": "^1.17.1",
-    "react-rnd": "^10.4.11",
-    "tailwind-merge": "^3.4.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/QuocVietHa08/react-pdf-highlighter-plus"
-  },
-  "devDependencies": {
-    "@types/lodash.debounce": "^4.0.9",
+    "tailwind-merge": "^3.4.0",
+    "@size-limit/preset-small-lib": "^11.1.6",
+    "size-limit": "^11.1.6",
     "@types/node": "^20.14.9",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

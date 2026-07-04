@@ -1,14 +1,12 @@
 import React, { MouseEvent } from "react";
-import HighlightPopup from "./HighlightPopup";
+import { useHighlightCommentControls } from "./HighlightPopup";
 import {
   AreaHighlight,
   DrawingHighlight,
   FreetextHighlight,
   ImageHighlight,
-  MonitoredHighlightContainer,
   ShapeHighlight,
   TextHighlight,
-  Tip,
   ViewportHighlight,
   useHighlightContainerContext,
   usePdfHighlighterContext,
@@ -44,11 +42,21 @@ const HighlightContainer = ({
 
   const { toggleEditInProgress } = usePdfHighlighterContext();
 
+  // Comment button + editor, shared by text/area highlights so a highlight's
+  // note lives in the same selected toolbar as its color/copy/delete actions
+  // — no separate hover popup that disappears once you click to select.
+  const commentControls = useHighlightCommentControls(
+    highlight,
+    (edit) => editHighlight(highlight.id, edit),
+    highlight.type === "text" ? "TextHighlight" : "AreaHighlight",
+  );
+
   let component;
 
   if (highlight.type === "text") {
     component = (
       <TextHighlight
+        key={highlight.id}
         isScrolledTo={isScrolledTo}
         highlight={highlight}
         highlightColor={highlight.highlightColor}
@@ -61,11 +69,14 @@ const HighlightContainer = ({
         onContextMenu={(event) =>
           onContextMenu && onContextMenu(event, highlight)
         }
+        extraButtons={commentControls.button}
+        extraPanel={commentControls.panel}
       />
     );
   } else if (highlight.type === "freetext") {
     component = (
       <FreetextHighlight
+        key={highlight.id}
         highlight={highlight}
         isScrolledTo={isScrolledTo}
         bounds={highlightBindings.textLayer}
@@ -102,6 +113,7 @@ const HighlightContainer = ({
   } else if (highlight.type === "image") {
     component = (
       <ImageHighlight
+        key={highlight.id}
         highlight={highlight}
         isScrolledTo={isScrolledTo}
         bounds={highlightBindings.textLayer}
@@ -119,11 +131,17 @@ const HighlightContainer = ({
         onEditStart={() => toggleEditInProgress(true)}
         onEditEnd={() => toggleEditInProgress(false)}
         onDelete={() => deleteHighlight(highlight.id)}
+        onImageChange={(newImage) => {
+          editHighlight(highlight.id, {
+            content: { ...highlight.content, image: newImage },
+          });
+        }}
       />
     );
   } else if (highlight.type === "drawing") {
     component = (
       <DrawingHighlight
+        key={highlight.id}
         highlight={highlight}
         isScrolledTo={isScrolledTo}
         bounds={highlightBindings.textLayer}
@@ -155,6 +173,7 @@ const HighlightContainer = ({
   } else if (highlight.type === "shape") {
     component = (
       <ShapeHighlight
+        key={highlight.id}
         highlight={highlight}
         isScrolledTo={isScrolledTo}
         bounds={highlightBindings.textLayer}
@@ -199,6 +218,7 @@ const HighlightContainer = ({
     // Area highlight (default)
     component = (
       <AreaHighlight
+        key={highlight.id}
         isScrolledTo={isScrolledTo}
         highlight={highlight}
         highlightColor={highlight.highlightColor}
@@ -226,25 +246,13 @@ const HighlightContainer = ({
           onContextMenu && onContextMenu(event, highlight)
         }
         onEditStart={() => toggleEditInProgress(true)}
+        extraButtons={commentControls.button}
+        extraPanel={commentControls.panel}
       />
     );
   }
 
-  const highlightTip: Tip = {
-    position: highlight.position,
-    content: <HighlightPopup highlight={highlight} />,
-  };
-
-  // Don't show popup tip for freetext, image, drawing, and shape highlights
-  const showTip = highlight.type !== "freetext" && highlight.type !== "image" && highlight.type !== "drawing" && highlight.type !== "shape";
-
-  return (
-    <MonitoredHighlightContainer
-      highlightTip={showTip ? highlightTip : undefined}
-      key={highlight.id}
-      children={component}
-    />
-  );
+  return component;
 };
 
 export default HighlightContainer;

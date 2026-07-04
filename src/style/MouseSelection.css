@@ -1,7 +1,7 @@
 .MouseSelection {
   position: absolute;
-  border: 1px dashed #333;
-  background: rgba(153,193,218,255);
+  border: 2px dashed var(--rphp-accent, #5b50e6);
+  background: rgba(91, 80, 230, 0.08);
   mix-blend-mode: multiply;
 }
 /* Internet Explorer support method */

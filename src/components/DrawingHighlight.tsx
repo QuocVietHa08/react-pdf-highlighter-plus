@@ -1,9 +1,11 @@
 import React, { CSSProperties, MouseEvent, ReactNode, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { Check, ChevronDown, Pencil, RotateCcw, RotateCw, Trash2 } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { findOrCreateHighlightConfigLayer } from "../lib/highlight-config-layer";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import type { DrawingStroke, LTWHP, ViewportHighlight } from "../types";
+import { useClearTipWhileSelected } from "../contexts/PdfHighlighterContext";
 
 // Drawing style presets (same as toolbar)
 const DRAWING_COLORS = ["#000000", "#FF0000", "#0000FF", "#00FF00", "#FFFF00"];
@@ -12,6 +14,15 @@ const STROKE_WIDTHS = [
   { label: "Medium", value: 3 },
   { label: "Thick", value: 5 },
 ];
+
+// Display names for the stroke color presets, used in the color dropdown.
+const COLOR_NAMES: Record<string, string> = {
+  "#000000": "Black",
+  "#FF0000": "Red",
+  "#0000FF": "Blue",
+  "#00FF00": "Green",
+  "#FFFF00": "Yellow",
+};
 
 /**
  * The props type for {@link DrawingHighlight}.
@@ -85,25 +96,10 @@ export interface DrawingHighlightProps {
   deleteIcon?: ReactNode;
 }
 
-/**
- * Default drag icon - 6 dot grid pattern.
- */
-const DefaultDragIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="8" cy="6" r="2" />
-    <circle cx="16" cy="6" r="2" />
-    <circle cx="8" cy="12" r="2" />
-    <circle cx="16" cy="12" r="2" />
-    <circle cx="8" cy="18" r="2" />
-    <circle cx="16" cy="18" r="2" />
-  </svg>
-);
+// (The dedicated drag handle was removed — the whole drawing body drags now.
+// The dragIcon prop is kept in the API for backward compatibility.)
 
-const DefaultDeleteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
+const DefaultDeleteIcon = () => <Trash2 width={14} height={14} />;
 
 /**
  * Re-render strokes to a canvas and return as PNG data URL.
@@ -159,18 +155,57 @@ export const DrawingHighlight = ({
   onDelete,
   deleteIcon,
 }: DrawingHighlightProps) => {
-  const highlightClass = isScrolledTo ? "DrawingHighlight--scrolledTo" : "";
   const [showStyleControls, setShowStyleControls] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
+  useClearTipWhileSelected(isSelected);
   const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
   const styleControlsRef = useRef<HTMLDivElement>(null);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
 
+  const highlightClass = isScrolledTo ? "DrawingHighlight--scrolledTo" : "";
+  const selectedClass = isSelected ? "DrawingHighlight--selected" : "";
+
+  // Deselect on click outside / Escape (selection interaction model).
+  // The toolbar is portaled outside the root, so clicks inside it must
+  // also count as "inside".
+  useEffect(() => {
+    if (!isSelected) return;
+    const handlePointerDown = (e: globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      const insideRoot = containerRef.current?.contains(target);
+      const insideToolbar = toolbarWrapperRef.current?.contains(target);
+      if (!insideRoot && !insideToolbar) {
+        setIsSelected(false);
+        setShowStyleControls(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSelected(false);
+        setShowStyleControls(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isSelected]);
+
+  // Resolve on every commit — a run-once effect can catch the text layer
+  // before pdf.js attaches it to .page, leaving configLayer null forever.
   useLayoutEffect(() => {
     if (containerRef.current) {
-      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+      const layer = findOrCreateHighlightConfigLayer(containerRef.current);
+      setConfigLayer((prev) => (prev === layer ? prev : layer));
     }
-  }, []);
+  });
 
   // Close style controls when clicking outside
   useEffect(() => {
@@ -192,6 +227,26 @@ export const DrawingHighlight = ({
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [showStyleControls]);
+
+  // Close color menu when clicking outside
+  useEffect(() => {
+    if (!isColorMenuOpen) return;
+
+    const handleClickOutside = (e: globalThis.MouseEvent) => {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target as Node)) {
+        setIsColorMenuOpen(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isColorMenuOpen]);
 
   // Generate key based on position for Rnd remount on position changes
   const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}`;
@@ -241,40 +296,129 @@ export const DrawingHighlight = ({
   const currentColor = strokes?.[0]?.color || "#000000";
   const currentWidth = strokes?.[0]?.width || 3;
 
+  // Rotate 90° at a time: rotate every stroke point around the canvas
+  // center, re-render to a new canvas with swapped dimensions (same
+  // bake-into-a-new-PNG approach as color/width changes), and swap the
+  // bounding rect to match, keeping the box centered in place.
+  const handleRotate = useCallback((clockwise: boolean) => {
+    if (!strokes || !onStyleChange) return;
+
+    const { width, height, left, top, pageNumber } =
+      highlight.position.boundingRect;
+
+    const newStrokes = strokes.map((stroke) => ({
+      ...stroke,
+      points: stroke.points.map((p) =>
+        clockwise
+          ? { x: height - p.y, y: p.x }
+          : { x: p.y, y: width - p.x },
+      ),
+    }));
+
+    const newImage = renderStrokesToImage(newStrokes, height, width);
+    onStyleChange(newImage, newStrokes);
+
+    const centerX = left + width / 2;
+    const centerY = top + height / 2;
+    onChange?.({
+      left: centerX - height / 2,
+      top: centerY - width / 2,
+      width: height,
+      height: width,
+      pageNumber,
+    });
+  }, [strokes, onStyleChange, onChange, highlight.position.boundingRect]);
+
+  // Not enough room above the box for the toolbar (e.g. the drawing sits at
+  // the very top of the page) — flip it below instead of letting it float
+  // up over whatever page content is above the box.
+  const flipToolbar = highlight.position.boundingRect.top < 40;
+
   return (
     <div
-      className={`DrawingHighlight ${highlightClass}`}
+      className={`DrawingHighlight ${highlightClass} ${selectedClass}`}
       onContextMenu={onContextMenu}
       ref={containerRef}
     >
       {configLayer &&
         createPortal(
           <div
-            className={`DrawingHighlight__toolbar DrawingHighlight__toolbar--floating ${isHovered || isScrolledTo || showStyleControls ? "DrawingHighlight__toolbar--visible" : ""}`}
+            className="DrawingHighlight__toolbar-wrapper"
+            ref={toolbarWrapperRef}
             style={{
-              left: highlight.position.boundingRect.left + 4,
-              top: highlight.position.boundingRect.top + 4,
+              position: "absolute",
+              left: highlight.position.boundingRect.left,
+              top: highlight.position.boundingRect.top,
             }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
           >
-            <div className="DrawingHighlight__drag-handle" title="Drag to move">
-              {dragIcon || <DefaultDragIcon />}
-            </div>
+          <div
+            className={`DrawingHighlight__toolbar DrawingHighlight__toolbar--floating ${flipToolbar ? "DrawingHighlight__toolbar--below" : ""} ${isSelected || isScrolledTo || showStyleControls ? "DrawingHighlight__toolbar--visible" : ""}`}
+          >
+            {strokes && strokes.length > 0 && onStyleChange && (
+              <>
+                {/* Color as a dropdown (swatch + chevron) instead of a row of
+                    dots — gives each preset room for a name and a checkmark
+                    on the active one, and keeps the toolbar itself compact. */}
+                <button
+                  type="button"
+                  className="DrawingHighlight__color-trigger"
+                  aria-label="Stroke color"
+                  aria-expanded={isColorMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStyleControls(false);
+                    setIsColorMenuOpen((v) => !v);
+                  }}
+                  title="Stroke color"
+                >
+                  <span
+                    className="DrawingHighlight__color-trigger-dot"
+                    style={{ backgroundColor: currentColor }}
+                  />
+                  <ChevronDown width={12} height={12} strokeWidth={2.5} />
+                </button>
+                <div className="DrawingHighlight__toolbar-divider" />
+              </>
+            )}
             {strokes && strokes.length > 0 && onStyleChange && (
               <button
                 type="button"
                 className="DrawingHighlight__style-button"
-                title="Edit style"
+                title="Stroke width"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setIsColorMenuOpen(false);
                   setShowStyleControls(!showStyleControls);
                 }}
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-                </svg>
+                <Pencil width={14} height={14} />
               </button>
+            )}
+            {strokes && strokes.length > 0 && onStyleChange && (
+              <>
+                <button
+                  type="button"
+                  className="DrawingHighlight__rotate-button"
+                  title="Rotate left"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRotate(false);
+                  }}
+                >
+                  <RotateCcw width={14} height={14} />
+                </button>
+                <button
+                  type="button"
+                  className="DrawingHighlight__rotate-button"
+                  title="Rotate right"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRotate(true);
+                  }}
+                >
+                  <RotateCw width={14} height={14} />
+                </button>
+              </>
             )}
             {onDelete && (
               <button
@@ -291,21 +435,6 @@ export const DrawingHighlight = ({
             )}
             {showStyleControls && strokes && strokes.length > 0 && onStyleChange && (
               <div className="DrawingHighlight__style-controls" ref={styleControlsRef}>
-                <div className="DrawingHighlight__color-picker">
-                  {DRAWING_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className={`DrawingHighlight__color-button ${currentColor === color ? 'active' : ''}`}
-                      style={{ backgroundColor: color }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleColorChange(color);
-                      }}
-                      title={`Color: ${color}`}
-                    />
-                  ))}
-                </div>
                 <div className="DrawingHighlight__width-picker">
                   {STROKE_WIDTHS.map((w) => (
                     <button
@@ -324,6 +453,38 @@ export const DrawingHighlight = ({
                 </div>
               </div>
             )}
+
+            {/* Color dropdown - same slot as the style controls */}
+            {isColorMenuOpen && strokes && strokes.length > 0 && onStyleChange && (
+              <div className="DrawingHighlight__color-menu" ref={colorMenuRef}>
+                {DRAWING_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className="DrawingHighlight__color-menu-item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleColorChange(color);
+                      setIsColorMenuOpen(false);
+                    }}
+                  >
+                    <span
+                      className="DrawingHighlight__color-menu-dot"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="DrawingHighlight__color-menu-label">
+                      {COLOR_NAMES[color] || color}
+                    </span>
+                    {currentColor === color && (
+                      <span className="DrawingHighlight__color-menu-check">
+                        <Check width={14} height={14} strokeWidth={2.5} />
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           </div>,
           configLayer,
         )}
@@ -338,7 +499,10 @@ export const DrawingHighlight = ({
           onChange?.(boundingRect);
           onEditEnd?.();
         }}
-        onDragStart={onEditStart}
+        onDragStart={() => {
+          setIsSelected(true);
+          onEditStart?.();
+        }}
         onResizeStop={(_e, _direction, ref, _delta, position) => {
           const boundingRect: LTWHP = {
             top: position.y,
@@ -365,16 +529,16 @@ export const DrawingHighlight = ({
         bounds={bounds}
         // No aspect ratio lock for drawings - allow free resizing
         lockAspectRatio={false}
+        // A click still selects the highlight (shows the toolbar).
         onClick={(event: Event) => {
           event.stopPropagation();
           event.preventDefault();
+          setIsSelected(true);
         }}
         style={style}
       >
         <div
           className="DrawingHighlight__container"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
         >
           <div className="DrawingHighlight__content">
             {imageUrl ? (

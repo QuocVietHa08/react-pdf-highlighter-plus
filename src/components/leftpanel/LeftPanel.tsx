@@ -101,23 +101,24 @@ export interface ToggleButtonClassNames {
   icon?: string;
 }
 
+// Verso: warm neutrals + indigo accent.
 const defaultTheme: LeftPanelTheme = {
   backgroundColor: '#ffffff',
-  borderColor: '#e5e7eb',
-  accentColor: '#3b82f6',
-  textColor: '#374151',
-  mutedTextColor: '#6b7280',
-  hoverBackgroundColor: '#f9fafb',
+  borderColor: '#e6e2da',
+  accentColor: '#5b50e6',
+  textColor: '#1c1b18',
+  mutedTextColor: '#8b8880',
+  hoverBackgroundColor: '#f4f2ee',
 };
 
 /** Dark-mode preset, used when `mode="dark"` (warm grays matching the
  *  PdfHighlighter dark page palette). Any `theme` prop fields override it. */
 const defaultDarkTheme: LeftPanelTheme = {
-  backgroundColor: '#1f1d1b',
+  backgroundColor: '#211f1c',
   borderColor: '#3a3733',
-  accentColor: '#7aa2f7',
+  accentColor: '#7b71f0',
   textColor: '#eae6e0',
-  mutedTextColor: '#a8a29a',
+  mutedTextColor: '#8b8880',
   hoverBackgroundColor: '#2a2724',
 };
 

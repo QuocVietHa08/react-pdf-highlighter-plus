@@ -1,18 +1,26 @@
 .AreaHighlight {
   position: absolute;
+  font-family: var(--rphp-font);
 }
 
 .AreaHighlight__part {
   cursor: pointer;
   position: absolute;
-  background: rgba(255, 226, 143, 1);
+  background: rgba(255, 214, 102, 0.95); /* --rphp-hl-yellow */
   transition: background 0.3s, box-shadow 0.2s ease;
+}
+
+/* Selected: accent ring (same shape as scrolledTo) */
+.AreaHighlight--selected .AreaHighlight__part {
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
 }
 
 .AreaHighlight--scrolledTo .AreaHighlight__part {
   box-shadow:
-    0 0 0 2px #ff4141,
-    0 0 0 4px rgba(255, 65, 65, 0.2);
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
 }
 
 /* Toolbar wrapper - creates hover bridge between toolbar and highlight */
@@ -20,122 +28,219 @@
   z-index: 10;
 }
 
-/* Toolbar - appears on hover */
+/* Toolbar - dark ink pill floating ABOVE the highlight (never covers it).
+   Shown on hover or while the highlight is selected. */
 .AreaHighlight__toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 4px;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--rphp-toolbar-bg, #1c1b18);
+  border-radius: var(--rphp-radius, 9px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(2px);
+  white-space: nowrap;
+}
+
+/* Hover bridge across the 6px gap between toolbar and highlight */
+.AreaHighlight__toolbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 10px;
 }
 
 .AreaHighlight__toolbar--visible {
   opacity: 1;
   pointer-events: auto;
+  transform: translateY(0);
 }
 
-.AreaHighlight__style-button,
+/* Flipped below the highlight — used when there's no room above (e.g. the
+   highlight sits at the very top of the page) so the toolbar doesn't float
+   up over whatever page content is above it. */
+.AreaHighlight__toolbar--below {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.AreaHighlight__toolbar--below::after {
+  top: auto;
+  bottom: 100%;
+}
+
+/* Color dropdown trigger: current-color swatch + chevron */
+.AreaHighlight__color-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px 0 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
+}
+
+.AreaHighlight__color-trigger:hover,
+.AreaHighlight__color-trigger[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.AreaHighlight__color-trigger-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.AreaHighlight__toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .AreaHighlight__copy-button,
+.AreaHighlight__comment-button,
 .AreaHighlight__delete-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: transparent;
   cursor: pointer;
-  color: white;
-  border-radius: 3px;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
   padding: 0;
-  transition: background 0.2s;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
 }
 
-.AreaHighlight__style-button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.AreaHighlight__comment-button:hover,
+.AreaHighlight__comment-button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 .AreaHighlight__copy-button:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 .AreaHighlight__delete-button:hover {
-  background: rgba(255, 100, 100, 0.6);
+  background: rgba(239, 68, 68, 0.24);
+  color: #ff8a80;
 }
 
-/* Style Panel */
-.AreaHighlight__style-panel {
-  margin-top: 4px;
-  background: rgba(0, 0, 0, 0.9);
-  border-radius: 6px;
-  padding: 8px;
-  min-width: 160px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-.AreaHighlight__style-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.AreaHighlight__style-row label {
-  color: #ccc;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-right: 8px;
-}
-
-/* Color options */
-.AreaHighlight__color-options {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.AreaHighlight__color-presets {
-  display: flex;
-  gap: 4px;
-}
-
-.AreaHighlight__color-preset {
-  width: 18px;
-  height: 18px;
-  border: 2px solid transparent;
+/* Dot badge: this highlight has a note, shown while the panel is closed */
+.AreaHighlight__comment-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
-  padding: 0;
+  background: var(--rphp-accent-tint, #d8d4fa);
+  pointer-events: none;
 }
 
-.AreaHighlight__color-preset:hover {
-  transform: scale(1.15);
+/* Comment panel - light surface card (Verso popover), same slot as the style panel */
+.AreaHighlight__comment-panel {
+  margin-top: 6px;
+  width: 260px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  overflow: hidden;
 }
 
-.AreaHighlight__color-preset.active {
-  border-color: #b958ff;
-}
-
-.AreaHighlight__color-options input[type="color"] {
-  width: 24px;
-  height: 24px;
-  padding: 0;
+.AreaHighlight__comment-panel textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 160px;
+  padding: 10px 12px;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  outline: none;
+  resize: none;
   background: transparent;
+  color: var(--rphp-text, #1c1b18);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
 }
 
-.AreaHighlight__color-options input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
+.AreaHighlight__comment-panel textarea::placeholder {
+  color: var(--rphp-text-muted, #8b8880);
+  font-style: italic;
 }
 
-.AreaHighlight__color-options input[type="color"]::-webkit-color-swatch {
-  border: 1px solid #666;
-  border-radius: 4px;
+/* Color dropdown menu - same slot/positioning as the old style panel */
+.AreaHighlight__color-menu {
+  margin-top: 6px;
+  width: 180px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.AreaHighlight__color-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--rphp-radius-sm, 6px);
+  cursor: pointer;
+  color: var(--rphp-text, #1c1b18);
+  font-size: 13px;
+  text-align: left;
+}
+
+.AreaHighlight__color-menu-item:hover {
+  background: var(--rphp-surface-alt, #f4f2ee);
+}
+
+.AreaHighlight__color-menu-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--rphp-border, #e6e2da);
+  flex-shrink: 0;
+}
+
+.AreaHighlight__color-menu-label {
+  flex: 1;
+}
+
+.AreaHighlight__color-menu-check {
+  display: flex;
+  color: var(--rphp-accent, #5b50e6);
+  flex-shrink: 0;
 }

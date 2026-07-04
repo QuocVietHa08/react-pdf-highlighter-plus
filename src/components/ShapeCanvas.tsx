@@ -371,18 +371,9 @@ export const ShapeCanvas = ({
         onTouchEnd={handleTouchEnd}
       />
       {renderShapePreview()}
-      <div className="ShapeCanvas__controls">
-        <div className="ShapeCanvas__hint">
-          Click and drag to draw a {shapeType}. Press Escape to cancel.
-        </div>
-        <button
-          type="button"
-          className="ShapeCanvas__cancelButton"
-          onClick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
+      {/* No on-canvas control bar: a shape commits on mouse-release and Escape
+          cancels (see the keydown handler), so the instruction/Cancel bar was
+          redundant clutter over the page. */}
     </>
   );
 };

@@ -128,14 +128,15 @@ const App = () => {
   const [areaMode, setAreaMode] = useState<boolean>(false);
   const [isSignaturePadOpen, setIsSignaturePadOpen] = useState<boolean>(false);
   const [pendingImageData, setPendingImageData] = useState<string | null>(null);
-  // Drawing mode state
+  // Drawing mode state. Width is a fixed default now — no pre-draw config panel;
+  // colour/width are adjusted on the highlight itself after drawing.
   const [drawingMode, setDrawingMode] = useState<boolean>(false);
   const [drawingStrokeColor, setDrawingStrokeColor] = useState<string>("#000000");
-  const [drawingStrokeWidth, setDrawingStrokeWidth] = useState<number>(3);
+  const drawingStrokeWidth = 3;
   // Shape mode state
   const [shapeMode, setShapeMode] = useState<ShapeType | null>(null);
   const [shapeStrokeColor, setShapeStrokeColor] = useState<string>("#000000");
-  const [shapeStrokeWidth, setShapeStrokeWidth] = useState<number>(2);
+  const shapeStrokeWidth = 2;
   // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
   const [scrolledToHighlightId, setScrolledToHighlightId] = useState<string | null>(null);
@@ -1067,16 +1068,8 @@ const App = () => {
             onAddSignature={handleAddSignature}
             drawingMode={drawingMode}
             onToggleDrawingMode={() => setDrawingMode(!drawingMode)}
-            drawingStrokeColor={drawingStrokeColor}
-            onDrawingColorChange={setDrawingStrokeColor}
-            drawingStrokeWidth={drawingStrokeWidth}
-            onDrawingWidthChange={setDrawingStrokeWidth}
             shapeMode={shapeMode}
             onSetShapeMode={setShapeMode}
-            shapeStrokeColor={shapeStrokeColor}
-            onShapeColorChange={setShapeStrokeColor}
-            shapeStrokeWidth={shapeStrokeWidth}
-            onShapeWidthChange={setShapeStrokeWidth}
           />
         </div>
       </div>

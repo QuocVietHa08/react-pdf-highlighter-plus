@@ -143,6 +143,163 @@ function dataUrlToBytes(dataUrl: string): {
 }
 
 /**
+ * Detect the encoded image format from a data URL's MIME type.
+ * pdf-lib can embed PNG and JPEG directly; anything else (notably SVG) must be
+ * rasterized to PNG first.
+ */
+function dataUrlFormat(dataUrl: string): "png" | "jpg" | "other" {
+  const mime = dataUrl.slice(5, dataUrl.indexOf(";")).toLowerCase();
+  if (mime === "image/png") return "png";
+  if (mime === "image/jpeg" || mime === "image/jpg") return "jpg";
+  return "other";
+}
+
+/**
+ * Corner radius (in PDF points) baked into exported image/drawing highlights so
+ * they match the rounded `--rphp-radius: 9px` box used in the on-screen preview.
+ */
+const CONTENT_RADIUS_PT = 9;
+
+/** Trace a rounded-rectangle subpath (fallback for browsers without ctx.roundRect). */
+function roundedRectPath(
+  ctx: CanvasRenderingContext2D,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.arcTo(w, 0, w, h, radius);
+  ctx.arcTo(w, h, 0, h, radius);
+  ctx.arcTo(0, h, 0, 0, radius);
+  ctx.arcTo(0, 0, w, 0, radius);
+  ctx.closePath();
+}
+
+/**
+ * Composite an image/drawing highlight onto an offscreen canvas exactly as the
+ * preview renders it, then return PNG bytes for pdf-lib to embed. This does
+ * three things the old raw-embed path couldn't:
+ *
+ *  1. Handles SVG/WebP/etc. — the previous code blindly fed non-PNG to embedJpg,
+ *     failing with "SOI not found in JPEG" and dropping the image.
+ *  2. Bakes in the rounded corners (`--rphp-radius`) so export matches preview.
+ *  3. Applies the correct object-fit — `fill` for images (stretch to box),
+ *     `contain` for drawings (keep aspect, centered on a white backing) — so a
+ *     drawing whose aspect differs from its box is no longer distorted.
+ *
+ * The canvas is sized to the box's aspect ratio, so the caller draws it filling
+ * the box (rotation handling unchanged). Requires a DOM; returns null
+ * server-side so the caller can fall back to a direct embed.
+ *
+ * @param boxWidthPts / boxHeightPts - Box size in PDF points, used for aspect
+ *   ratio, raster resolution, and radius scaling.
+ */
+async function compositeHighlightImageToPng(
+  dataUrl: string,
+  boxWidthPts: number,
+  boxHeightPts: number,
+  opts: { fit: "fill" | "contain"; background?: string },
+): Promise<Uint8Array | null> {
+  if (typeof document === "undefined" || typeof Image === "undefined") {
+    return null;
+  }
+
+  const img = await new Promise<HTMLImageElement | null>((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = dataUrl;
+  });
+  if (!img) return null;
+
+  // Render at 2× the box size (in points) so the baked-in result stays crisp
+  // when embedded and scaled back to the box.
+  const scale = 2;
+  const cw = Math.max(1, Math.round(boxWidthPts * scale));
+  const ch = Math.max(1, Math.round(boxHeightPts * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  // Clip everything to the rounded box so corners are transparent (page shows
+  // through), matching the preview's `overflow: hidden` rounded content box.
+  roundedRectPath(ctx, cw, ch, CONTENT_RADIUS_PT * scale);
+  ctx.clip();
+
+  if (opts.background) {
+    ctx.fillStyle = opts.background;
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  const iw = img.naturalWidth || cw;
+  const ih = img.naturalHeight || ch;
+
+  if (opts.fit === "contain") {
+    const s = Math.min(cw / iw, ch / ih);
+    const dw = iw * s;
+    const dh = ih * s;
+    ctx.drawImage(img, (cw - dw) / 2, (ch - dh) / 2, dw, dh);
+  } else {
+    ctx.drawImage(img, 0, 0, cw, ch);
+  }
+
+  return dataUrlToBytes(canvas.toDataURL("image/png")).bytes;
+}
+
+/**
+ * Draw a filled rounded rectangle. pdf-lib has no rounded-rect primitive, so
+ * this builds an SVG path and draws it via drawSvgPath. Matches the preview's
+ * `--rphp-radius: 9px` rounded highlight/area/freetext boxes, which the old
+ * drawRectangle calls rendered with sharp corners.
+ *
+ * @param x, y - Bottom-left of the box in PDF points (Y up, as elsewhere here).
+ */
+function drawRoundedRectangle(
+  page: PDFPage,
+  o: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: ReturnType<typeof rgb>;
+    opacity: number;
+    radius: number;
+  }
+): void {
+  const r = Math.max(0, Math.min(o.radius, o.width / 2, o.height / 2));
+  if (r <= 0) {
+    page.drawRectangle({
+      x: o.x,
+      y: o.y,
+      width: o.width,
+      height: o.height,
+      color: o.color,
+      opacity: o.opacity,
+    });
+    return;
+  }
+  const { width: w, height: h } = o;
+  // Path is in SVG space (origin top-left, Y down). drawSvgPath anchors SVG
+  // (0,0) at the given (x, y), so pass the box's TOP edge (o.y + h) as y.
+  const path =
+    `M ${r} 0 H ${w - r} A ${r} ${r} 0 0 1 ${w} ${r} ` +
+    `V ${h - r} A ${r} ${r} 0 0 1 ${w - r} ${h} ` +
+    `H ${r} A ${r} ${r} 0 0 1 0 ${h - r} ` +
+    `V ${r} A ${r} ${r} 0 0 1 ${r} 0 Z`;
+  page.drawSvgPath(path, {
+    x: o.x,
+    y: o.y + h,
+    color: o.color,
+    opacity: o.opacity,
+  });
+}
+
+/**
  * Wrap text into multiple lines that fit within maxWidth.
  * Long words are broken character by character (like CSS word-wrap: break-word).
  */
@@ -257,14 +414,17 @@ async function renderTextHighlight(
     const { x, y, width, height } = scaledToPdfPoints(rect, page);
 
     if (highlightStyle === "highlight") {
-      // Draw filled rectangle for background highlight
-      page.drawRectangle({
+      // Draw filled rounded rectangle for background highlight (rounded to
+      // match the preview's `--rphp-radius` highlight parts; clamps to a pill
+      // on short rects).
+      drawRoundedRectangle(page, {
         x,
         y,
         width,
         height,
         color: rgb(color.r, color.g, color.b),
         opacity: color.a,
+        radius: CONTENT_RADIUS_PT,
       });
     } else if (highlightStyle === "underline") {
       // Draw line at bottom of rectangle
@@ -312,13 +472,14 @@ async function renderAreaHighlight(
     page
   );
 
-  page.drawRectangle({
+  drawRoundedRectangle(page, {
     x,
     y,
     width,
     height,
     color: rgb(color.r, color.g, color.b),
     opacity: color.a,
+    radius: CONTENT_RADIUS_PT,
   });
 }
 
@@ -363,13 +524,14 @@ async function renderFreetextHighlight(
   const bgColorValue = highlight.backgroundColor || options.defaultFreetextBgColor || "#ffffc8";
   if (bgColorValue !== "transparent") {
     const bgColor = parseColor(bgColorValue);
-    page.drawRectangle({
+    drawRoundedRectangle(page, {
       x,
       y,
       width,
       height,
       color: rgb(bgColor.r, bgColor.g, bgColor.b),
       opacity: bgColor.a,
+      radius: CONTENT_RADIUS_PT,
     });
   }
 
@@ -449,30 +611,55 @@ function transformToRawCoordinates(
 }
 
 /**
- * Render an image highlight (embedded image).
+ * Render an image or drawing highlight (embedded image).
  * Handles page rotation by transforming visual coordinates to raw MediaBox space.
- * Image fills the entire bounding box to match the visual wrapper in preview.
+ * The image is composited to match the preview's rounded, white-backed content
+ * box before embedding, so corners, backing, and aspect-fit all line up.
+ *
+ * @param kind - "image" fills the box (object-fit: fill, like a photo tile);
+ *   "drawing" fits inside keeping aspect (object-fit: contain) on a white
+ *   backing, matching each type's CSS in the preview.
  */
 async function renderImageHighlight(
   pdfDoc: PDFDocument,
   page: PDFPage,
-  highlight: ExportableHighlight
+  highlight: ExportableHighlight,
+  kind: "image" | "drawing" = "image"
 ): Promise<void> {
   const imageDataUrl = highlight.content?.image;
   if (!imageDataUrl) return;
 
   try {
-    const { bytes, type } = dataUrlToBytes(imageDataUrl);
-    const image =
-      type === "png"
-        ? await pdfDoc.embedPng(bytes)
-        : await pdfDoc.embedJpg(bytes);
-
     // Calculate coordinates in visual space - use full bounding box dimensions
     const visualCoords = scaledToPdfPoints(
       highlight.position.boundingRect,
       page
     );
+
+    // Composite to a PNG that bakes in the preview's rounded corners, white
+    // backing, and per-type object-fit. Falls back to a direct embed when no
+    // canvas is available (e.g. server-side) — sharp corners, but never drops
+    // the image (and still rasterizes SVG, which pdf-lib can't embed itself).
+    let image;
+    const pngBytes = await compositeHighlightImageToPng(
+      imageDataUrl,
+      visualCoords.width,
+      visualCoords.height,
+      { fit: kind === "drawing" ? "contain" : "fill", background: "#ffffff" }
+    );
+    if (pngBytes) {
+      image = await pdfDoc.embedPng(pngBytes);
+    } else {
+      const format = dataUrlFormat(imageDataUrl);
+      if (format === "png") {
+        image = await pdfDoc.embedPng(dataUrlToBytes(imageDataUrl).bytes);
+      } else if (format === "jpg") {
+        image = await pdfDoc.embedJpg(dataUrlToBytes(imageDataUrl).bytes);
+      } else {
+        console.error("Cannot embed image: unsupported format and no canvas to rasterize");
+        return;
+      }
+    }
 
     // Transform to raw MediaBox coordinates based on page rotation
     const rawCoords = transformToRawCoordinates(
@@ -672,7 +859,8 @@ export async function exportPdf(
           break;
         case "drawing":
           // Drawings are stored as PNG images, reuse image highlight rendering
-          await renderImageHighlight(pdfDoc, page, highlight);
+          // but with contain-fit so an ink drawing keeps its aspect ratio.
+          await renderImageHighlight(pdfDoc, page, highlight, "drawing");
           break;
         case "shape":
           await renderShapeHighlight(page, highlight);

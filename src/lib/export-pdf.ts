@@ -636,16 +636,20 @@ async function renderImageHighlight(
       page
     );
 
-    // Composite to a PNG that bakes in the preview's rounded corners, white
-    // backing, and per-type object-fit. Falls back to a direct embed when no
-    // canvas is available (e.g. server-side) — sharp corners, but never drops
-    // the image (and still rasterizes SVG, which pdf-lib can't embed itself).
+    // Composite to a PNG that bakes in the preview's rounded corners and
+    // per-type object-fit. No background fill: signatures and drawings are
+    // transparent-PNG ink, so they read as ink-only over the page — matching
+    // shape highlights (rectangle/arrow), which are stroke-only on a
+    // transparent background. Opaque photos still cover their box on their own.
+    // Falls back to a direct embed when no canvas is available (e.g.
+    // server-side) — sharp corners, but never drops the image (and still
+    // rasterizes SVG, which pdf-lib can't embed itself).
     let image;
     const pngBytes = await compositeHighlightImageToPng(
       imageDataUrl,
       visualCoords.width,
       visualCoords.height,
-      { fit: kind === "drawing" ? "contain" : "fill", background: "#ffffff" }
+      { fit: kind === "drawing" ? "contain" : "fill" }
     );
     if (pngBytes) {
       image = await pdfDoc.embedPng(pngBytes);

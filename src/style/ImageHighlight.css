@@ -105,7 +105,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--rphp-surface, #ffffff);
+  /* Transparent, not a white matte: the image is object-fit:fill so an opaque
+     photo covers this box entirely (white never showed anyway), while a
+     transparent PNG — a signature — now reads as ink-only over the page, like
+     a shape highlight (arrow/rectangle) rather than a white card. */
+  background: transparent;
   overflow: hidden;
   border-radius: var(--rphp-radius, 9px);
 }

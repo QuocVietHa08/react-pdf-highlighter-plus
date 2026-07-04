@@ -146,10 +146,10 @@
   justify-content: center;
   overflow: hidden;
   border-radius: var(--rphp-radius, 9px);
-  /* Opaque backing so the strokes don't let page text show through
-     underneath (the stroke PNG itself still has a transparent alpha
-     channel — only the ink is opaque). */
-  background: var(--rphp-surface, #ffffff);
+  /* Transparent backing: only the ink shows over the page, like a shape
+     highlight (arrow/rectangle). The stroke PNG's own alpha channel keeps
+     everything but the ink see-through. */
+  background: transparent;
 }
 
 .DrawingHighlight__image {

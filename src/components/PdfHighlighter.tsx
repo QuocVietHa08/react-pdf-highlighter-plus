@@ -642,6 +642,10 @@ export const PdfHighlighter = ({
     }),
   );
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  // Last observed container size. Survives listener-effect re-runs so the
+  // fresh observer's mandatory initial callback can be told apart from a real
+  // resize (consumers passing inline props re-run that effect every render).
+  const lastContainerSizeRef = useRef<{ w: number; h: number } | null>(null);
   const renderRetryTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>(
     [],
   );
@@ -768,7 +772,21 @@ export const PdfHighlighter = ({
   useLayoutEffect(() => {
     if (!containerNodeRef.current) return;
 
-    resizeObserverRef.current = new ResizeObserver(handleScaleValue);
+    // Re-apply the scale ONLY on real container size changes ("auto"/"page-
+    // width" must re-fit). ResizeObserver fires an initial callback on every
+    // observe() — and this effect re-binds whenever its deps change identity —
+    // so without the size check that initial callback force-set the scale
+    // after every consumer render (the second re-raster per zoom commit).
+    resizeObserverRef.current = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect;
+      if (!rect) return;
+      const last = lastContainerSizeRef.current;
+      if (last && last.w === rect.width && last.h === rect.height) return;
+      lastContainerSizeRef.current = { w: rect.width, h: rect.height };
+      // Skip the very first measurement too — initial scale is applied by the
+      // pagesinit handler below, not by observation start.
+      if (last) handleScaleValueRef.current();
+    });
     resizeObserverRef.current.observe(containerNodeRef.current);
 
     const doc = containerNodeRef.current.ownerDocument;
@@ -912,7 +930,12 @@ export const PdfHighlighter = ({
 
     const MIN_SCALE = 0.25;
     const MAX_SCALE = 10;
-    const COMMIT_DELAY = 140; // ms of no wheel events before committing
+    // Ms of no wheel events before committing (one crisp re-raster). Mouse
+    // wheel notches often arrive 150–250ms apart, so anything shorter makes
+    // nearly EVERY notch commit — a full PDF.js re-raster per notch, which
+    // reads as terrible zoom performance. 280ms coalesces a notch train into
+    // one commit while trackpad pinches (dense event streams) are unaffected.
+    const COMMIT_DELAY = 280;
 
     // Live gesture state. originX/Y are the anchor in CONTENT coords (fixed for
     // the whole gesture); anchorX/Y are the same point relative to the container.
@@ -988,12 +1011,20 @@ export const PdfHighlighter = ({
         Math.max(MIN_SCALE, g.startScale * g.k),
       );
       const ratio = finalScale / g.startScale;
+      // No-op gesture (e.g. wheeling past the min/max clamp, or a pinch that
+      // returned to 1×): the preview transform is already cleared above, so
+      // skip the re-raster entirely — committing the SAME scale would still
+      // re-render every visible page for zero visual change.
+      if (Math.abs(ratio - 1) < 1e-3) return;
       // Re-raster once at the new scale, then anchor the scroll so the content
       // point under the gesture stays in place.
       viewer.currentScaleValue = String(finalScale);
       container.scrollLeft = g.originX * ratio - g.anchorX;
       container.scrollTop = g.originY * ratio - g.anchorY;
-      onZoomChangeRef.current?.(finalScale);
+      // Notify the consumer on the NEXT task: their setState re-renders the
+      // whole app, and doing that inside the commit frame piles React work on
+      // top of PDF.js's relayout — a visibly longer hitch.
+      setTimeout(() => onZoomChangeRef.current?.(finalScale), 0);
       console.log("[PdfHighlighter] pinch commit", {
         from: g.startScale,
         to: finalScale,
@@ -1008,12 +1039,18 @@ export const PdfHighlighter = ({
     const handleWheel = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return; // pinch / ctrl-scroll only
       e.preventDefault();
-      const rect = container.getBoundingClientRect();
-      const ax = e.clientX - rect.left;
-      const ay = e.clientY - rect.top;
-      if (!g.active && !begin(ax, ay)) return;
+      if (!g.active) {
+        // Anchor is fixed for the whole gesture, so the (layout-forcing)
+        // getBoundingClientRect read only happens here — not on every notch.
+        const rect = container.getBoundingClientRect();
+        if (!begin(e.clientX - rect.left, e.clientY - rect.top)) return;
+      }
+      // Normalise deltaMode: Firefox mouse wheels report lines (~±3), not
+      // pixels (~±100) — without this, zoom there barely moves per notch.
+      const delta =
+        e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 100 : e.deltaY;
       // Exponential: each notch is a constant ratio. Up = zoom in.
-      g.k = clampK(g.k * Math.exp(-e.deltaY * 0.01));
+      g.k = clampK(g.k * Math.exp(-delta * 0.01));
       preview();
       scheduleCommit(); // wheel has no end event — commit after it stops
     };
@@ -1285,10 +1322,36 @@ export const PdfHighlighter = ({
   };
 
   const handleScaleValue = () => {
-    if (viewerRef.current) {
-      viewerRef.current.currentScaleValue = pdfScaleValue.toString();
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    // Skip when the viewer is already (within rounding noise) at the target
+    // scale. Without this, every pinch/wheel commit paid for a SECOND full
+    // re-raster: commit sets the exact scale (e.g. 1.5373), onZoomChange gives
+    // the consumer a rounded value (1.54) back via the pdfScaleValue prop, and
+    // re-applying that near-identical value re-rendered every visible page
+    // again — and without scroll anchoring, so the view could also shift.
+    const target = parseFloat(String(pdfScaleValue));
+    if (
+      !Number.isNaN(target) &&
+      Math.abs(viewer.currentScale - target) / target < 0.005
+    ) {
+      return;
     }
+    viewer.currentScaleValue = pdfScaleValue.toString();
   };
+  const handleScaleValueRef = useRef(handleScaleValue);
+  handleScaleValueRef.current = handleScaleValue;
+
+  // Apply pdfScaleValue when the PROP changes (zoom buttons, external zoom
+  // state). Previously this only worked by accident: consumers passing inline
+  // props re-ran the listener effect every render, whose fresh
+  // ResizeObserver.observe() fired an initial callback that re-applied the
+  // prop. That accident also caused the double-raster above — the observer is
+  // now guarded to real size changes, so the prop needs its own effect.
+  useEffect(() => {
+    handleScaleValueRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfScaleValue, isViewerReady]);
 
   // Render Highlight layers
   const renderHighlightLayer = (

@@ -118,16 +118,26 @@ const stripUndefined = <T extends object>(obj: T): Partial<T> => {
   return out;
 };
 
+// Security defaults: PDFs can embed JavaScript (form actions, annotations) that
+// pdf.js will otherwise evaluate. Viewers routinely load untrusted documents, so
+// scripting is off unless the consumer explicitly re-enables it through
+// DocumentInitParameters (their fields win over these defaults).
+const SECURE_DEFAULTS = {
+  enableScripting: false,
+  isEvalSupported: false,
+};
+
 const buildSource = (
   document: string | URL | TypedArray | DocumentInitParameters,
   perf: PerfOptions,
 ) => {
-  const cleaned = stripUndefined(perf);
+  const cleaned = { ...SECURE_DEFAULTS, ...stripUndefined(perf) };
   if (typeof document === "string" || document instanceof URL) {
     return { url: document, ...cleaned };
   }
   if (ArrayBuffer.isView(document)) {
-    return document; // raw bytes: streaming options don't apply
+    // Raw bytes: streaming options don't apply, but scripting defaults do.
+    return { ...SECURE_DEFAULTS, data: document };
   }
   // DocumentInitParameters — caller's explicit fields win over our defaults.
   return { ...cleaned, ...document };

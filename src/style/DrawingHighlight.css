@@ -1,5 +1,6 @@
 .DrawingHighlight {
   position: absolute;
+  font-family: var(--rphp-font);
 }
 
 .DrawingHighlight__container {
@@ -7,58 +8,131 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: 4px;
+  border-radius: var(--rphp-radius, 9px);
   overflow: visible;
   transition: box-shadow 0.2s ease;
 }
 
 .DrawingHighlight__container:hover {
-  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
 }
 
+/* Toolbar wrapper - anchors the toolbar above the drawing and creates a
+   hover bridge between toolbar and drawing */
+.DrawingHighlight__toolbar-wrapper {
+  z-index: 10;
+}
+
+/* Toolbar - dark ink pill floating ABOVE the drawing (never covers it).
+   Shown on hover or while the drawing is selected. */
 .DrawingHighlight__toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 4px;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--rphp-toolbar-bg, #1c1b18);
+  border-radius: var(--rphp-radius, 9px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
   position: absolute;
   top: 4px;
   left: 4px;
   z-index: 10;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(2px);
+  white-space: nowrap;
 }
 
 .DrawingHighlight__toolbar--floating {
   position: absolute;
   top: auto;
-  left: auto;
+  bottom: calc(100% + 6px);
+  left: 0;
 }
 
+/* Hover bridge across the 6px gap between toolbar and drawing */
+.DrawingHighlight__toolbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
+/* Toolbar shows on SELECT only (hover shows the comment popup instead —
+   revealing both on hover made them overlap). */
 .DrawingHighlight__toolbar--visible {
   opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 
-.DrawingHighlight__container:hover .DrawingHighlight__toolbar {
-  opacity: 1;
+/* Flipped below the drawing — used when there's no room above (e.g. the
+   drawing sits at the very top of the page) so the toolbar doesn't float
+   up over whatever page content is above it. */
+.DrawingHighlight__toolbar--floating.DrawingHighlight__toolbar--below {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.DrawingHighlight__toolbar--floating.DrawingHighlight__toolbar--below::after {
+  top: auto;
+  bottom: 100%;
+}
+
+/* Color dropdown trigger: current-color swatch + chevron */
+.DrawingHighlight__color-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px 0 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
+}
+
+.DrawingHighlight__color-trigger:hover,
+.DrawingHighlight__color-trigger[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.DrawingHighlight__color-trigger-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.DrawingHighlight__toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .DrawingHighlight__drag-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   cursor: grab;
-  color: white;
-  border-radius: 3px;
-  transition: background 0.2s;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
 }
 
 .DrawingHighlight__drag-handle:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 .DrawingHighlight__drag-handle:active {
@@ -71,9 +145,11 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 4px;
-  /* Transparent background for drawings */
-  background: transparent;
+  border-radius: var(--rphp-radius, 9px);
+  /* Opaque backing so the strokes don't let page text show through
+     underneath (the stroke PNG itself still has a transparent alpha
+     channel — only the ink is opaque). */
+  background: var(--rphp-surface, #ffffff);
 }
 
 .DrawingHighlight__image {
@@ -84,68 +160,121 @@
   user-select: none;
 }
 
+/* Selected: accent ring + the whole body is draggable */
+.DrawingHighlight--selected .DrawingHighlight__container {
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
+}
+
 .DrawingHighlight--scrolledTo .DrawingHighlight__container {
-  box-shadow: 0 0 0 3px #ff4141, 2px 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25),
+    var(--rphp-shadow, 0 2px 8px rgba(28, 27, 24, 0.12));
+}
+
+/* The whole drawing body drags */
+.DrawingHighlight__container {
+  cursor: grab;
+}
+
+.DrawingHighlight__container:active {
+  cursor: grabbing;
 }
 
 /* Style edit button */
-.DrawingHighlight__style-button {
+.DrawingHighlight__style-button,
+.DrawingHighlight__rotate-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   background: transparent;
   border: none;
   cursor: pointer;
-  color: white;
-  border-radius: 3px;
-  transition: background 0.2s;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
 }
 
-.DrawingHighlight__style-button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.DrawingHighlight__style-button:hover,
+.DrawingHighlight__rotate-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
-/* Style controls dropdown */
+/* Style controls dropdown - light surface card (Verso popover) */
 .DrawingHighlight__style-controls {
   position: absolute;
   top: 28px;
   left: 4px;
-  background: rgba(0, 0, 0, 0.85);
-  border-radius: 6px;
-  padding: 8px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  padding: 12px;
   z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-width: 120px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
 }
 
-.DrawingHighlight__color-picker {
+/* Color dropdown menu - same fixed anchor as the style controls panel */
+.DrawingHighlight__color-menu {
+  position: absolute;
+  top: 28px;
+  left: 4px;
+  width: 180px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  padding: 6px;
+  z-index: 20;
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.DrawingHighlight__color-button {
-  width: 20px;
-  height: 20px;
-  border: 2px solid transparent;
-  border-radius: 50%;
+.DrawingHighlight__color-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--rphp-radius-sm, 6px);
   cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
-  padding: 0;
+  color: var(--rphp-text, #1c1b18);
+  font-size: 13px;
+  text-align: left;
 }
 
-.DrawingHighlight__color-button:hover {
-  transform: scale(1.15);
+.DrawingHighlight__color-menu-item:hover {
+  background: var(--rphp-surface-alt, #f4f2ee);
 }
 
-.DrawingHighlight__color-button.active {
-  border-color: #b958ff;
+.DrawingHighlight__color-menu-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--rphp-border, #e6e2da);
+  flex-shrink: 0;
+}
+
+.DrawingHighlight__color-menu-label {
+  flex: 1;
+}
+
+.DrawingHighlight__color-menu-check {
+  display: flex;
+  color: var(--rphp-accent, #5b50e6);
+  flex-shrink: 0;
 }
 
 .DrawingHighlight__width-picker {
@@ -154,41 +283,44 @@
 }
 
 .DrawingHighlight__width-button {
-  background: transparent;
-  color: #f5f5f5;
-  border: 1px solid #666;
-  border-radius: 4px;
+  background: var(--rphp-surface-alt, #f4f2ee);
+  color: var(--rphp-text-secondary, #57544d);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-sm, 6px);
   cursor: pointer;
   font-size: 10px;
+  font-family: var(--rphp-font);
   padding: 2px 6px;
-  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
 }
 
 .DrawingHighlight__width-button:hover {
-  border-color: #b958ff;
+  border-color: var(--rphp-accent, #5b50e6);
+  color: var(--rphp-accent, #5b50e6);
 }
 
 .DrawingHighlight__width-button.active {
-  color: #b958ff;
-  border-color: #b958ff;
-  background-color: rgba(185, 88, 255, 0.2);
+  color: var(--rphp-accent, #5b50e6);
+  border-color: var(--rphp-accent, #5b50e6);
+  background-color: var(--rphp-accent-soft, #eceaf9);
 }
 
 .DrawingHighlight__delete-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: transparent;
   cursor: pointer;
-  color: white;
-  border-radius: 3px;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
   padding: 0;
-  transition: background 0.2s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .DrawingHighlight__delete-button:hover {
-  background: rgba(255, 100, 100, 0.6);
+  background: rgba(239, 68, 68, 0.24);
+  color: #ff8a80;
 }

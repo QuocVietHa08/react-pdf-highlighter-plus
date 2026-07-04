@@ -43,6 +43,8 @@ export type PdfTextUnitType =
   | "affiliation"
   | "footnote"
   | "reference"
+  | "caption"
+  | "figureLabel"
   | "unknown";
 
 export type PdfTextUnit = {
@@ -937,11 +939,28 @@ const classifyTextUnit = (
       : "reference";
   }
 
+  // Figure/table captions: the human-written summary of a graphic. Kept as
+  // their own type so consumers (e.g. read-aloud) can speak the caption while
+  // skipping the diagram's label fragments.
+  if (/^(figure|fig\.?|table|chart|diagram|listing|algorithm)\s*\d/i.test(text)) {
+    return "caption";
+  }
+
   if (isLikelySectionHeading(text)) return "heading";
 
   if (isTopOfFirstPage && isLargeText && isCentered) return "title";
   if (isTopOfFirstPage && isLikelyAuthor(text)) return "author";
   if (isTopOfFirstPage && isLikelyAffiliation(text)) return "affiliation";
+
+  // Diagram/figure labels: short isolated fragments with no sentence-ending
+  // punctuation ("v1 router", "Compatibility adapter", "DB"). Real paragraph
+  // blocks group many lines and end with punctuation, so this rarely triggers
+  // on prose — it keeps chart lettering out of the "paragraph" stream that
+  // features like read-aloud consume.
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if (wordCount <= 6 && text.length <= 60 && !/[.!?…:]\s*$/.test(text)) {
+    return "figureLabel";
+  }
 
   return "paragraph";
 };
@@ -1041,7 +1060,51 @@ export const extractTextUnits = async (
   return extractTextUnitsFromPages(pages, resolvedOptions);
 };
 
-export const extractPageTextItems = async (
+// Text extraction is expensive (getPage + getTextContent for every page) and
+// callers like getTextPosition / extractSentences run it repeatedly — e.g. one
+// citation lookup per query. Cache the resulting promise per document+options:
+// WeakMap keyed on the proxy means entries vanish with the document (no manual
+// invalidation), and caching the PROMISE dedupes concurrent calls too.
+const pageTextItemsCache = new WeakMap<
+  PDFDocumentProxy,
+  Map<string, Promise<PdfExtractedPage[]>>
+>();
+
+const pageTextItemsCacheKey = (
+  options: Pick<ExtractSentencesOptions, "pages" | "columnDetection">,
+): string => {
+  const pages =
+    options.pages === undefined || options.pages === "all"
+      ? "all"
+      : options.pages.join(",");
+  return `${pages}|${options.columnDetection ?? DEFAULT_OPTIONS.columnDetection}`;
+};
+
+export const extractPageTextItems = (
+  pdfDocument: PDFDocumentProxy,
+  options: Pick<ExtractSentencesOptions, "pages" | "columnDetection"> = {},
+): Promise<PdfExtractedPage[]> => {
+  let byOptions = pageTextItemsCache.get(pdfDocument);
+  if (!byOptions) {
+    byOptions = new Map();
+    pageTextItemsCache.set(pdfDocument, byOptions);
+  }
+  const key = pageTextItemsCacheKey(options);
+  const cached = byOptions.get(key);
+  if (cached) return cached;
+
+  const promise = extractPageTextItemsUncached(pdfDocument, options).catch(
+    (error) => {
+      // Don't cache failures — a transient error would poison every later call.
+      byOptions!.delete(key);
+      throw error;
+    },
+  );
+  byOptions.set(key, promise);
+  return promise;
+};
+
+const extractPageTextItemsUncached = async (
   pdfDocument: PDFDocumentProxy,
   options: Pick<ExtractSentencesOptions, "pages" | "columnDetection"> = {},
 ): Promise<PdfExtractedPage[]> => {

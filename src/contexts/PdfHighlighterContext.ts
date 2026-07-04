@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect } from "react";
 import { GhostHighlight, Highlight, PdfSelection, Tip } from "../types";
 import { PDFViewer } from "pdfjs-dist/types/web/pdf_viewer";
 
@@ -149,6 +149,18 @@ export type PdfHighlighterUtils = {
    * Clear active search highlights.
    */
   clearSearch(): void;
+
+  /**
+   * Marks a highlight as selected/deselected (its floating toolbar is open).
+   * Counter-backed, so overlapping select/deselect from different highlights
+   * resolves correctly. Used to suppress hover tips while a toolbar is shown.
+   */
+  setHighlightSelected(selected: boolean): void;
+
+  /**
+   * Whether any highlight is currently selected (toolbar showing).
+   */
+  isHighlightSelected(): boolean;
 };
 
 export const PdfHighlighterContext = createContext<
@@ -171,4 +183,24 @@ export const usePdfHighlighterContext = () => {
   }
 
   return pdfHighlighterUtils;
+};
+
+/**
+ * Keeps hover tips out of the way while a highlight is selected: clears the
+ * active tip immediately and marks the selection for its whole duration so
+ * MonitoredHighlightContainer suppresses new hover tips until deselect —
+ * the floating toolbar and the popup would otherwise fight for the same space
+ * above the highlight. Safe outside PdfHighlighter (no-op).
+ *
+ * @category Context
+ * @internal
+ */
+export const useClearTipWhileSelected = (isSelected: boolean) => {
+  const pdfHighlighterUtils = useContext(PdfHighlighterContext);
+  useEffect(() => {
+    if (!isSelected || !pdfHighlighterUtils) return;
+    pdfHighlighterUtils.setTip(null);
+    pdfHighlighterUtils.setHighlightSelected(true);
+    return () => pdfHighlighterUtils.setHighlightSelected(false);
+  }, [isSelected, pdfHighlighterUtils]);
 };

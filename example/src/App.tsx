@@ -376,6 +376,10 @@ const App = () => {
     if (!pdfDocument) return [];
     const sentences = await extractSentences(pdfDocument, {
       includePositions: true,
+      // Read prose, section headings, the title, and figure captions (the
+      // caption is the human-written summary of a graphic). Diagram label
+      // fragments ("v1 router", "DB") classify as figureLabel and are skipped.
+      includeTextUnitTypes: ["paragraph", "heading", "title", "caption"],
     });
     return sentences
       .filter((s) => s.position)

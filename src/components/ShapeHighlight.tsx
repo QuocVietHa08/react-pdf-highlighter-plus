@@ -8,10 +8,12 @@ import React, {
   useLayoutEffect,
 } from "react";
 import { createPortal } from "react-dom";
+import { Check, ChevronDown, Palette, Trash2 } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { findOrCreateHighlightConfigLayer } from "../lib/highlight-config-layer";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import type { LTWHP, ShapeType, ViewportHighlight } from "../types";
+import { useClearTipWhileSelected } from "../contexts/PdfHighlighterContext";
 
 /**
  * Style options for shape highlight appearance.
@@ -123,18 +125,10 @@ export interface ShapeHighlightProps {
   endPoint?: { x: number; y: number };
 }
 
-// Default icons
-const DefaultStyleIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-  </svg>
-);
-
-const DefaultDeleteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
+// Default icons — lucide-react, so the toolbar matches the example app's
+// icon vocabulary instead of a separate hand-drawn set.
+const DefaultStyleIcon = () => <Palette width={14} height={14} />;
+const DefaultDeleteIcon = () => <Trash2 width={14} height={14} />;
 
 // Default color presets for shapes
 const DEFAULT_COLOR_PRESETS = [
@@ -144,6 +138,15 @@ const DEFAULT_COLOR_PRESETS = [
   "#00AA00", // Green
   "#FF6600", // Orange
 ];
+
+// Display names for the default presets, used in the color dropdown.
+const COLOR_NAMES: Record<string, string> = {
+  "#000000": "Black",
+  "#FF0000": "Red",
+  "#0000FF": "Blue",
+  "#00AA00": "Green",
+  "#FF6600": "Orange",
+};
 
 // Stroke width options
 const STROKE_WIDTHS = [
@@ -179,16 +182,53 @@ export const ShapeHighlight = ({
   endPoint,
 }: ShapeHighlightProps) => {
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
+  useClearTipWhileSelected(isSelected);
   const [configLayer, setConfigLayer] = useState<HTMLElement | null>(null);
   const stylePanelRef = useRef<HTMLDivElement>(null);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const toolbarWrapperRef = useRef<HTMLDivElement>(null);
 
+  // Deselect on click outside / Escape (selection interaction model).
+  // The toolbar is portaled outside the root, so clicks inside it must
+  // also count as "inside".
+  useEffect(() => {
+    if (!isSelected) return;
+    const handlePointerDown = (e: globalThis.MouseEvent) => {
+      const target = e.target as Node;
+      const insideRoot = containerRef.current?.contains(target);
+      const insideToolbar = toolbarWrapperRef.current?.contains(target);
+      if (!insideRoot && !insideToolbar) {
+        setIsSelected(false);
+        setIsStylePanelOpen(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsSelected(false);
+        setIsStylePanelOpen(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isSelected]);
+
+  // Resolve on every commit — a run-once effect can catch the text layer
+  // before pdf.js attaches it to .page, leaving configLayer null forever.
   useLayoutEffect(() => {
     if (containerRef.current) {
-      setConfigLayer(findOrCreateHighlightConfigLayer(containerRef.current));
+      const layer = findOrCreateHighlightConfigLayer(containerRef.current);
+      setConfigLayer((prev) => (prev === layer ? prev : layer));
     }
-  }, []);
+  });
 
   // Close style panel when clicking outside
   useEffect(() => {
@@ -214,7 +254,31 @@ export const ShapeHighlight = ({
     };
   }, [isStylePanelOpen]);
 
+  // Close color menu when clicking outside
+  useEffect(() => {
+    if (!isColorMenuOpen) return;
+
+    const handleClickOutside = (e: globalThis.MouseEvent) => {
+      if (
+        colorMenuRef.current &&
+        !colorMenuRef.current.contains(e.target as Node)
+      ) {
+        setIsColorMenuOpen(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isColorMenuOpen]);
+
   const highlightClass = isScrolledTo ? "ShapeHighlight--scrolledTo" : "";
+  const selectedClass = isSelected ? "ShapeHighlight--selected" : "";
 
   // Generate key based on position for Rnd remount on position changes
   const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}`;
@@ -308,7 +372,7 @@ export const ShapeHighlight = ({
 
   return (
     <div
-      className={`ShapeHighlight ${highlightClass}`}
+      className={`ShapeHighlight ${highlightClass} ${selectedClass}`}
       onContextMenu={onContextMenu}
       ref={containerRef}
     >
@@ -316,26 +380,51 @@ export const ShapeHighlight = ({
         createPortal(
         <div
           className="ShapeHighlight__toolbar-wrapper"
+          ref={toolbarWrapperRef}
           style={{
             position: "absolute",
             left: highlight.position.boundingRect.left,
-            top: highlight.position.boundingRect.top - 28,
-            paddingBottom: 12,
+            top: highlight.position.boundingRect.top,
           }}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
         >
           <div
-            className={`ShapeHighlight__toolbar ${isHovered || isScrolledTo || isStylePanelOpen ? "ShapeHighlight__toolbar--visible" : ""}`}
+            className={`ShapeHighlight__toolbar ${isSelected || isScrolledTo || isStylePanelOpen || isColorMenuOpen ? "ShapeHighlight__toolbar--visible" : ""}`}
           >
+            {onStyleChange && (
+              <>
+                {/* Color as a dropdown (swatch + chevron) instead of a row of
+                    dots — gives each preset room for a name and a checkmark
+                    on the active one, and keeps the toolbar itself compact. */}
+                <button
+                  type="button"
+                  className="ShapeHighlight__color-trigger"
+                  aria-label="Stroke color"
+                  aria-expanded={isColorMenuOpen}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsStylePanelOpen(false);
+                    setIsColorMenuOpen((v) => !v);
+                  }}
+                  title="Stroke color"
+                >
+                  <span
+                    className="ShapeHighlight__color-trigger-dot"
+                    style={{ backgroundColor: strokeColor }}
+                  />
+                  <ChevronDown width={12} height={12} strokeWidth={2.5} />
+                </button>
+                <div className="ShapeHighlight__toolbar-divider" />
+              </>
+            )}
             {onStyleChange && (
               <button
                 className="ShapeHighlight__style-button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setIsColorMenuOpen(false);
                   setIsStylePanelOpen(!isStylePanelOpen);
                 }}
-                title="Change style"
+                title="Stroke width"
                 type="button"
               >
                 {styleIcon || <DefaultStyleIcon />}
@@ -356,6 +445,40 @@ export const ShapeHighlight = ({
             )}
           </div>
 
+          {/* Color dropdown - same slot as the style panel */}
+          {isColorMenuOpen && onStyleChange && (
+            <div
+              className="ShapeHighlight__color-menu"
+              ref={colorMenuRef}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {colorPresets.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="ShapeHighlight__color-menu-item"
+                  onClick={() => {
+                    onStyleChange({ strokeColor: c });
+                    setIsColorMenuOpen(false);
+                  }}
+                >
+                  <span
+                    className="ShapeHighlight__color-menu-dot"
+                    style={{ backgroundColor: c }}
+                  />
+                  <span className="ShapeHighlight__color-menu-label">
+                    {COLOR_NAMES[c] || c}
+                  </span>
+                  {strokeColor === c && (
+                    <span className="ShapeHighlight__color-menu-check">
+                      <Check width={14} height={14} strokeWidth={2.5} />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Style Panel - inside wrapper */}
           {isStylePanelOpen && onStyleChange && (
             <div
@@ -363,30 +486,6 @@ export const ShapeHighlight = ({
               ref={stylePanelRef}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="ShapeHighlight__style-row">
-                <label>Color</label>
-                <div className="ShapeHighlight__color-options">
-                  <div className="ShapeHighlight__color-presets">
-                    {colorPresets.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className={`ShapeHighlight__color-preset ${strokeColor === c ? "active" : ""}`}
-                        style={{ backgroundColor: c }}
-                        onClick={() => onStyleChange({ strokeColor: c })}
-                        title={c}
-                      />
-                    ))}
-                  </div>
-                  <input
-                    type="color"
-                    value={strokeColor}
-                    onChange={(e) => {
-                      onStyleChange({ strokeColor: e.target.value });
-                    }}
-                  />
-                </div>
-              </div>
               <div className="ShapeHighlight__style-row">
                 <label>Width</label>
                 <div className="ShapeHighlight__width-options">
@@ -410,8 +509,6 @@ export const ShapeHighlight = ({
         )}
 
       <Rnd
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className="ShapeHighlight__rnd"
         onDragStop={(_, data) => {
           const boundingRect: LTWHP = {
@@ -422,7 +519,10 @@ export const ShapeHighlight = ({
           onChange?.(boundingRect);
           onEditEnd?.();
         }}
-        onDragStart={onEditStart}
+        onDragStart={() => {
+          setIsSelected(true);
+          onEditStart?.();
+        }}
         onResizeStop={(_e, _direction, ref, _delta, position) => {
           const boundingRect: LTWHP = {
             top: position.y,
@@ -448,9 +548,11 @@ export const ShapeHighlight = ({
         key={key}
         bounds={bounds}
         lockAspectRatio={shapeType === "circle"}
+        // A click still selects the highlight (shows the toolbar).
         onClick={(event: Event) => {
           event.stopPropagation();
           event.preventDefault();
+          setIsSelected(true);
         }}
         style={style}
       >

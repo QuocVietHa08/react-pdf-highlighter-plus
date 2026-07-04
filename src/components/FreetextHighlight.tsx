@@ -6,9 +6,11 @@ import React, {
   useRef,
   useEffect,
 } from "react";
+import { Check, ChevronDown, Minimize2, Palette, Pencil, StickyNote, Trash2 } from "lucide-react";
 import { Rnd } from "react-rnd";
 import { getPageFromElement } from "../lib/pdfjs-dom";
 import type { LTWHP, ViewportHighlight } from "../types";
+import { useClearTipWhileSelected } from "../contexts/PdfHighlighterContext";
 
 /**
  * Style options for freetext highlight appearance.
@@ -161,50 +163,33 @@ export interface FreetextHighlightProps {
  * @category Component
  */
 // Default icons
-const DefaultDragIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="8" cy="6" r="2" />
-    <circle cx="16" cy="6" r="2" />
-    <circle cx="8" cy="12" r="2" />
-    <circle cx="16" cy="12" r="2" />
-    <circle cx="8" cy="18" r="2" />
-    <circle cx="16" cy="18" r="2" />
-  </svg>
-);
+// (The dedicated drag handle was removed — the whole note body drags now.
+// The dragIcon prop is kept in the API for backward compatibility.)
 
-const DefaultEditIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-  </svg>
-);
-
-const DefaultStyleIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-  </svg>
-);
-
-const DefaultDeleteIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-  </svg>
-);
-
-const DefaultCompactIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M6 3h9l5 5v13H6V3zm8 1.5V9h4.5L14 4.5zM8 12h8v1.5H8V12zm0 3h8v1.5H8V15zm0 3h5v1.5H8V18z" />
-  </svg>
-);
-
-const DefaultCollapseIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M7 10v2h10v-2H7zm-2-7h14c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2H5c-1.1 0-2-.9-2-2V5c0-1.1.9-2 2-2zm0 2v14h14V5H5z" />
-  </svg>
-);
+// Default icons — lucide-react, so the toolbar matches the example app's
+// icon vocabulary instead of a separate hand-drawn set.
+const DefaultEditIcon = () => <Pencil width={14} height={14} />;
+const DefaultStyleIcon = () => <Palette width={14} height={14} />;
+const DefaultDeleteIcon = () => <Trash2 width={14} height={14} />;
+const DefaultCompactIcon = () => <StickyNote width={16} height={16} />;
+const DefaultCollapseIcon = () => <Minimize2 width={14} height={14} />;
+const ChevronDownIcon = () => <ChevronDown width={12} height={12} strokeWidth={2.5} />;
+const CheckIcon = () => <Check width={14} height={14} strokeWidth={2.5} />;
 
 // Default color presets
 const DEFAULT_BACKGROUND_PRESETS = ["transparent", "#ffffc8", "#ffcdd2", "#c8e6c9", "#bbdefb", "#e1bee7"];
 const DEFAULT_TEXT_PRESETS = ["#333333", "#d32f2f", "#1976d2", "#388e3c", "#7b1fa2"];
+
+// Display names for the default background presets, used in the color
+// dropdown. A custom preset (not in this map) just falls back to its value.
+const BACKGROUND_COLOR_NAMES: Record<string, string> = {
+  transparent: "None",
+  "#ffffc8": "Yellow",
+  "#ffcdd2": "Red",
+  "#c8e6c9": "Green",
+  "#bbdefb": "Blue",
+  "#e1bee7": "Purple",
+};
 
 export const FreetextHighlight = ({
   highlight,
@@ -233,11 +218,41 @@ export const FreetextHighlight = ({
   compactIcon,
 }: FreetextHighlightProps) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isSelected, setIsSelected] = useState(false);
+  useClearTipWhileSelected(isSelected);
   const [isExpanded, setIsExpanded] = useState(!compact);
   const [isStylePanelOpen, setIsStylePanelOpen] = useState(false);
+  const [isColorMenuOpen, setIsColorMenuOpen] = useState(false);
   const [text, setText] = useState(highlight.content?.text || "");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const stylePanelRef = useRef<HTMLDivElement>(null);
+  const colorMenuRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Deselect on click outside / Escape (sticky-note interaction model).
+  useEffect(() => {
+    if (!isSelected) return;
+    const handlePointerDown = (e: globalThis.MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setIsSelected(false);
+        setIsStylePanelOpen(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    const handleKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape" && !isEditing) {
+        setIsSelected(false);
+        setIsStylePanelOpen(false);
+        setIsColorMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [isSelected, isEditing]);
 
   // Sync text with highlight content when it changes externally
   useEffect(() => {
@@ -247,6 +262,7 @@ export const FreetextHighlight = ({
   useEffect(() => {
     setIsExpanded(!compact);
     setIsStylePanelOpen(false);
+    setIsColorMenuOpen(false);
     if (!compact) {
       setIsEditing(false);
     }
@@ -281,19 +297,52 @@ export const FreetextHighlight = ({
     };
   }, [isStylePanelOpen]);
 
+  // Close color menu when clicking outside
+  useEffect(() => {
+    if (!isColorMenuOpen) return;
+
+    const handleClickOutside = (e: globalThis.MouseEvent) => {
+      if (colorMenuRef.current && !colorMenuRef.current.contains(e.target as Node)) {
+        setIsColorMenuOpen(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isColorMenuOpen]);
+
   const highlightClass = isScrolledTo ? "FreetextHighlight--scrolledTo" : "";
   const editingClass = isEditing ? "FreetextHighlight--editing" : "";
+  const selectedClass = isSelected ? "FreetextHighlight--selected" : "";
   const compactClass = compact ? "FreetextHighlight--compact" : "";
-  const isCompactCollapsed = compact && !isExpanded && !isEditing && !isStylePanelOpen;
+  const isCompactCollapsed = compact && !isExpanded && !isEditing && !isStylePanelOpen && !isColorMenuOpen;
   const collapsedClass = isCompactCollapsed ? "FreetextHighlight--collapsed" : "";
+
+  // Not enough room above the box for the toolbar (e.g. the note sits at
+  // the very top of the page) — flip it below instead of letting it float
+  // up over whatever page content is above the box.
+  const flipToolbar = highlight.position.boundingRect.top < 40;
 
   // Generate key based on position for Rnd remount on position changes
   const key = `${highlight.position.boundingRect.width}${highlight.position.boundingRect.height}${highlight.position.boundingRect.left}${highlight.position.boundingRect.top}${isCompactCollapsed ? "collapsed" : "expanded"}`;
 
-  const handleTextClick = (e: React.MouseEvent) => {
+  // Single click selects (shows the toolbar); double-click edits in place.
+  const handleNoteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!isEditing) setIsSelected(true);
+  };
+
+  const enterEditMode = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
     if (!isEditing) {
       setIsExpanded(true);
+      setIsSelected(true);
       setIsEditing(true);
       onEditStart?.();
     }
@@ -331,7 +380,8 @@ export const FreetextHighlight = ({
 
   return (
     <div
-      className={`FreetextHighlight ${highlightClass} ${editingClass} ${compactClass} ${collapsedClass}`}
+      ref={rootRef}
+      className={`FreetextHighlight ${highlightClass} ${editingClass} ${selectedClass} ${compactClass} ${collapsedClass}`}
       onContextMenu={onContextMenu}
     >
       <Rnd
@@ -346,9 +396,11 @@ export const FreetextHighlight = ({
         }}
         onDragStart={() => {
           if (!isEditing) {
+            setIsSelected(true);
             onEditStart?.();
           }
         }}
+        disableDragging={isEditing}
         default={{
           x: highlight.position.boundingRect.left,
           y: highlight.position.boundingRect.top,
@@ -390,9 +442,16 @@ export const FreetextHighlight = ({
             onEditStart?.();
           }
         }}
-        cancel=".FreetextHighlight__text, .FreetextHighlight__input, .FreetextHighlight__edit-button, .FreetextHighlight__style-button, .FreetextHighlight__style-panel, .FreetextHighlight__delete-button, .FreetextHighlight__collapse-button, .FreetextHighlight__compact-button"
+        // The whole note body drags (sticky-note model); only interactive
+        // controls and the edit textarea are excluded.
+        cancel=".FreetextHighlight__input, .FreetextHighlight__toolbar, .FreetextHighlight__style-panel, .FreetextHighlight__color-menu, .FreetextHighlight__compact-button"
       >
-        <div className="FreetextHighlight__container" style={containerStyle}>
+        <div
+          className="FreetextHighlight__container"
+          style={containerStyle}
+          onClick={handleNoteClick}
+          onDoubleClick={enterEditMode}
+        >
           {isCompactCollapsed ? (
             <button
               className="FreetextHighlight__compact-button"
@@ -407,14 +466,38 @@ export const FreetextHighlight = ({
             </button>
           ) : (
             <>
-          <div className="FreetextHighlight__toolbar">
-            <div className="FreetextHighlight__drag-handle" title="Drag to move">
-              {dragIcon || <DefaultDragIcon />}
-            </div>
+          <div
+            className={`FreetextHighlight__toolbar ${flipToolbar ? "FreetextHighlight__toolbar--below" : ""}`}
+          >
+            {/* Color as a dropdown (swatch + chevron) instead of a row of
+                dots — gives each preset room for a name and a checkmark on
+                the active one, and keeps the toolbar itself compact. */}
+            <button
+              type="button"
+              className="FreetextHighlight__color-trigger"
+              aria-label="Background color"
+              aria-expanded={isColorMenuOpen}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsStylePanelOpen(false);
+                setIsColorMenuOpen((v) => !v);
+              }}
+              title="Background color"
+            >
+              <span
+                className="FreetextHighlight__color-trigger-dot"
+                style={{
+                  backgroundColor:
+                    backgroundColor === "transparent" ? undefined : backgroundColor,
+                }}
+              />
+              <ChevronDownIcon />
+            </button>
+            <div className="FreetextHighlight__toolbar-divider" />
             <button
               className="FreetextHighlight__edit-button"
-              onClick={handleTextClick}
-              title="Edit text"
+              onClick={enterEditMode}
+              title="Edit text (or double-click the note)"
               type="button"
             >
               {editIcon || <DefaultEditIcon />}
@@ -423,6 +506,7 @@ export const FreetextHighlight = ({
               className="FreetextHighlight__style-button"
               onClick={(e) => {
                 e.stopPropagation();
+                setIsColorMenuOpen(false);
                 setIsStylePanelOpen(!isStylePanelOpen);
               }}
               title="Change style"
@@ -437,6 +521,7 @@ export const FreetextHighlight = ({
                   e.stopPropagation();
                   setIsExpanded(false);
                   setIsStylePanelOpen(false);
+                  setIsColorMenuOpen(false);
                 }}
                 title="Collapse note"
                 type="button"
@@ -458,36 +543,47 @@ export const FreetextHighlight = ({
               </button>
             )}
           </div>
+
+          {/* Color dropdown - own slot, same as the style panel */}
+          {isColorMenuOpen && (
+            <div
+              className={`FreetextHighlight__color-menu ${flipToolbar ? "FreetextHighlight__color-menu--below-toolbar" : ""}`}
+              ref={colorMenuRef}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {backgroundColorPresets.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className="FreetextHighlight__color-menu-item"
+                  onClick={() => {
+                    onStyleChange?.({ backgroundColor: c });
+                    setIsColorMenuOpen(false);
+                  }}
+                >
+                  <span
+                    className={`FreetextHighlight__color-menu-dot ${c === "transparent" ? "FreetextHighlight__color-menu-dot--transparent" : ""}`}
+                    style={c !== "transparent" ? { backgroundColor: c } : undefined}
+                  />
+                  <span className="FreetextHighlight__color-menu-label">
+                    {BACKGROUND_COLOR_NAMES[c] || c}
+                  </span>
+                  {backgroundColor === c && (
+                    <span className="FreetextHighlight__color-menu-check">
+                      <CheckIcon />
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {isStylePanelOpen && (
             <div
-              className="FreetextHighlight__style-panel"
+              className={`FreetextHighlight__style-panel ${flipToolbar ? "FreetextHighlight__style-panel--below-toolbar" : ""}`}
               ref={stylePanelRef}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="FreetextHighlight__style-row">
-                <label>Background</label>
-                <div className="FreetextHighlight__color-options">
-                  <div className="FreetextHighlight__color-presets">
-                    {backgroundColorPresets.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className={`FreetextHighlight__color-preset ${c === "transparent" ? "FreetextHighlight__color-preset--transparent" : ""} ${backgroundColor === c ? "active" : ""}`}
-                        style={c !== "transparent" ? { backgroundColor: c } : undefined}
-                        onClick={() => onStyleChange?.({ backgroundColor: c })}
-                        title={c === "transparent" ? "No background" : c}
-                      />
-                    ))}
-                  </div>
-                  <input
-                    type="color"
-                    value={backgroundColor === "transparent" ? "#ffffff" : backgroundColor}
-                    onChange={(e) => {
-                      onStyleChange?.({ backgroundColor: e.target.value });
-                    }}
-                  />
-                </div>
-              </div>
               <div className="FreetextHighlight__style-row">
                 <label
 

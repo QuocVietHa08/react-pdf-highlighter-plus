@@ -9,6 +9,11 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   outDir: "dist/esm",
+  // treeshake: dead-code-eliminate at build; splitting: keep dynamic imports
+  // (the lazy exportPdf wrapper) as separate chunks so pdf-lib is only
+  // downloaded by consumers that actually export PDFs.
+  treeshake: true,
+  splitting: true,
   external: ["react", "react-dom", "pdfjs-dist"],
   esbuildOptions(options) {
     options.jsx = "transform";

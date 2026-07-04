@@ -1,4 +1,5 @@
 /* Combined styles for react-pdf-highlighter-plus */
+@import "./tokens.css";
 @import "./pdf_viewer.css";
 @import "./PdfHighlighter.css";
 @import "./MouseSelection.css";

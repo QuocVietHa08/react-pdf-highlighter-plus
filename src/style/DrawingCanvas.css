@@ -7,6 +7,7 @@
   touch-action: none;
 }
 
+/* Control bar - light surface card (Verso) */
 .DrawingCanvas__controls {
   position: fixed;
   bottom: 20px;
@@ -14,19 +15,22 @@
   transform: translateX(-50%);
   display: flex;
   gap: 10px;
-  padding: 10px 20px;
-  background-color: rgba(43, 46, 51, 0.95);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 10px 12px;
+  background-color: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
   z-index: 10;
 }
 
 .DrawingCanvas__controls button {
-  padding: 8px 16px;
+  padding: 6px 14px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--rphp-radius, 9px);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--rphp-font);
   transition: background-color 0.2s, transform 0.1s;
 }
 
@@ -34,29 +38,33 @@
   transform: scale(1.02);
 }
 
+/* Primary action */
 .DrawingCanvas__doneButton {
-  background-color: #4CAF50;
-  color: white;
+  background-color: var(--rphp-accent, #5b50e6);
+  color: var(--rphp-text-on-accent, #ffffff);
 }
 
 .DrawingCanvas__doneButton:hover {
-  background-color: #45a049;
+  background-color: var(--rphp-accent-strong, #4a40d4);
 }
 
+/* Danger action */
 .DrawingCanvas__cancelButton {
-  background-color: #f44336;
-  color: white;
+  background-color: transparent;
+  color: var(--rphp-danger, #ef4444);
 }
 
 .DrawingCanvas__cancelButton:hover {
-  background-color: #da190b;
+  background-color: rgba(239, 68, 68, 0.12);
 }
 
+/* Secondary action */
 .DrawingCanvas__clearButton {
-  background-color: #ff9800;
-  color: white;
+  background-color: var(--rphp-surface-alt, #f4f2ee);
+  color: var(--rphp-text-secondary, #57544d);
+  border: 1px solid var(--rphp-border, #e6e2da);
 }
 
 .DrawingCanvas__clearButton:hover {
-  background-color: #e68a00;
+  background-color: var(--rphp-surface-sunken, #efece5);
 }

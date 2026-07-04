@@ -1,83 +1,199 @@
+/* eSign modal — Verso surface card over a blurred ink overlay.
+   Button selectors are anchored to .SignaturePad__modal so they outrank
+   consumer CSS resets (e.g. Tailwind preflight's `[type='button']
+   { background-color: transparent }`) regardless of stylesheet load order. */
+
 .SignaturePad__overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(28, 27, 24, 0.55);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
+  animation: SignaturePad-fade 0.15s ease;
 }
 
+@keyframes SignaturePad-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Dialog card */
 .SignaturePad__modal {
-  background: white;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  font-family: var(--rphp-font, sans-serif);
+  animation: SignaturePad-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+@keyframes SignaturePad-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header: title + subtitle left, close right */
+.SignaturePad__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .SignaturePad__title {
-  margin: 0 0 12px 0;
+  margin: 0;
   font-size: 16px;
-  font-weight: 600;
-  color: #333;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--rphp-text, #1c1b18);
+}
+
+.SignaturePad__subtitle {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--rphp-text-muted, #8b8880);
+}
+
+.SignaturePad__modal .SignaturePad__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--rphp-radius-sm, 6px);
+  background: transparent;
+  color: var(--rphp-text-muted, #8b8880);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.SignaturePad__modal .SignaturePad__close:hover {
+  background: var(--rphp-surface-alt, #f4f2ee);
+  color: var(--rphp-text, #1c1b18);
+}
+
+/* Canvas area: sunken paper with a signature baseline */
+.SignaturePad__canvas-wrap {
+  position: relative;
+  border: 1.5px dashed var(--rphp-border-strong, #b7b3ab);
+  border-radius: var(--rphp-radius-lg, 12px);
+  background: var(--rphp-bg, #faf9f6);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.SignaturePad__canvas-wrap:hover {
+  border-color: var(--rphp-accent, #5b50e6);
 }
 
 .SignaturePad__canvas {
   display: block;
-  border: 1px solid #ccc;
-  border-radius: 4px;
   cursor: crosshair;
   touch-action: none;
-  background: white;
+  background: transparent;
+  position: relative;
+  z-index: 1;
 }
 
+/* Baseline the signature sits on ("✕ ————") */
+.SignaturePad__baseline {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 34px;
+  border-bottom: 1.5px solid var(--rphp-border, #e6e2da);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.SignaturePad__baseline-x {
+  position: absolute;
+  left: 0;
+  bottom: 4px;
+  font-size: 11px;
+  color: var(--rphp-text-muted, #8b8880);
+}
+
+/* Footer: Clear on the left, Cancel + primary on the right */
 .SignaturePad__buttons {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 12px;
-  justify-content: flex-end;
+  margin-top: 16px;
 }
 
-.SignaturePad__button {
+.SignaturePad__buttons-right {
+  display: flex;
+  gap: 8px;
+}
+
+.SignaturePad__modal .SignaturePad__button {
   padding: 8px 16px;
-  font-size: 14px;
-  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--rphp-font, sans-serif);
+  border-radius: var(--rphp-radius, 9px);
   cursor: pointer;
-  transition: background-color 0.2s, border-color 0.2s;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.SignaturePad__button--clear {
-  background: white;
-  border: 1px solid #ccc;
-  color: #666;
+/* Clear: quiet text button */
+.SignaturePad__modal .SignaturePad__button--clear {
+  background: transparent;
+  border: none;
+  color: var(--rphp-text-muted, #8b8880);
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
-.SignaturePad__button--clear:hover {
-  background: #f5f5f5;
-  border-color: #999;
+.SignaturePad__modal .SignaturePad__button--clear:hover {
+  background: var(--rphp-surface-alt, #f4f2ee);
+  color: var(--rphp-text-secondary, #57544d);
 }
 
-.SignaturePad__button--cancel {
-  background: white;
-  border: 1px solid #ccc;
-  color: #666;
+/* Cancel: secondary */
+.SignaturePad__modal .SignaturePad__button--cancel {
+  background: var(--rphp-surface-alt, #f4f2ee);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  color: var(--rphp-text-secondary, #57544d);
 }
 
-.SignaturePad__button--cancel:hover {
-  background: #f5f5f5;
-  border-color: #999;
+.SignaturePad__modal .SignaturePad__button--cancel:hover {
+  background: var(--rphp-surface-sunken, #efece5);
+  border-color: var(--rphp-border-strong, #b7b3ab);
 }
 
-.SignaturePad__button--done {
-  background: #2196f3;
-  border: 1px solid #2196f3;
-  color: white;
+/* Primary: accent */
+.SignaturePad__modal .SignaturePad__button--done {
+  background: var(--rphp-accent, #5b50e6);
+  border: 1px solid var(--rphp-accent, #5b50e6);
+  color: var(--rphp-text-on-accent, #ffffff);
+  box-shadow: 0 2px 8px -2px var(--rphp-accent, #5b50e6);
 }
 
-.SignaturePad__button--done:hover {
-  background: #1976d2;
-  border-color: #1976d2;
+.SignaturePad__modal .SignaturePad__button--done:hover {
+  background: var(--rphp-accent-strong, #4a40d4);
+  border-color: var(--rphp-accent-strong, #4a40d4);
 }

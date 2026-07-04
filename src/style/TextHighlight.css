@@ -1,5 +1,6 @@
 .TextHighlight {
   position: absolute;
+  font-family: var(--rphp-font);
 }
 
 .TextHighlight__parts {
@@ -9,14 +10,21 @@
 .TextHighlight__part {
   cursor: pointer;
   position: absolute;
-  background: rgba(255, 226, 143, 1);
+  background: rgba(255, 214, 102, 0.95); /* --rphp-hl-yellow */
   transition: background 0.3s, box-shadow 0.2s ease;
+}
+
+/* Selected: accent ring (same shape as scrolledTo) */
+.TextHighlight--selected .TextHighlight__part {
+  box-shadow:
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
 }
 
 .TextHighlight--scrolledTo .TextHighlight__part {
   box-shadow:
-    0 0 0 2px #ff4141,
-    0 0 0 4px rgba(255, 65, 65, 0.2);
+    0 0 0 2px var(--rphp-accent, #5b50e6),
+    0 0 0 5px rgba(91, 80, 230, 0.25);
 }
 
 /* Toolbar wrapper - creates hover bridge between toolbar and highlight */
@@ -24,68 +32,186 @@
   z-index: 10;
 }
 
-/* Toolbar - appears on hover */
+/* Toolbar - dark ink pill floating ABOVE the highlight (never covers it).
+   Shown on hover or while the highlight is selected. */
 .TextHighlight__toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
-  background: rgba(0, 0, 0, 0.7);
-  border-radius: 4px;
+  gap: 2px;
+  padding: 4px 6px;
+  background: var(--rphp-toolbar-bg, #1c1b18);
+  border-radius: var(--rphp-radius, 9px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translateY(2px);
+  white-space: nowrap;
+}
+
+/* Hover bridge across the 6px gap between toolbar and highlight */
+.TextHighlight__toolbar::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 10px;
 }
 
 .TextHighlight__toolbar--visible {
   opacity: 1;
   pointer-events: auto;
+  transform: translateY(0);
+}
+
+/* Flipped below the highlight — used when there's no room above (e.g. the
+   highlight sits at the very top of the page) so the toolbar doesn't float
+   up over whatever page content is above it. */
+.TextHighlight__toolbar--below {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+.TextHighlight__toolbar--below::after {
+  top: auto;
+  bottom: 100%;
+}
+
+/* Color dropdown trigger: current-color swatch + chevron */
+.TextHighlight__color-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 6px 0 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
+}
+
+.TextHighlight__color-trigger:hover,
+.TextHighlight__color-trigger[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.TextHighlight__color-trigger-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.TextHighlight__toolbar-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .TextHighlight__style-button,
 .TextHighlight__copy-button,
+.TextHighlight__comment-button,
 .TextHighlight__delete-button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 26px;
+  height: 26px;
   border: none;
   background: transparent;
   cursor: pointer;
-  color: white;
-  border-radius: 3px;
+  color: #efece5;
+  border-radius: var(--rphp-radius-sm, 6px);
   padding: 0;
-  transition: background 0.2s;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
 }
 
-.TextHighlight__style-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.TextHighlight__copy-button:hover {
-  background: rgba(255, 255, 255, 0.2);
+.TextHighlight__style-button:hover,
+.TextHighlight__copy-button:hover,
+.TextHighlight__comment-button:hover,
+.TextHighlight__comment-button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
 }
 
 .TextHighlight__delete-button:hover {
-  background: rgba(255, 100, 100, 0.6);
+  background: rgba(239, 68, 68, 0.24);
+  color: #ff8a80;
 }
 
-/* Style Panel */
+/* Dot badge: this highlight has a note, shown while the panel is closed */
+.TextHighlight__comment-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--rphp-accent-tint, #d8d4fa);
+  pointer-events: none;
+}
+
+/* Comment panel - light surface card (Verso popover), same slot as the style panel */
+.TextHighlight__comment-panel {
+  margin-top: 6px;
+  width: 260px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  overflow: hidden;
+}
+
+.TextHighlight__comment-panel textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 160px;
+  padding: 10px 12px;
+  border: none;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--rphp-text, #1c1b18);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+}
+
+.TextHighlight__comment-panel textarea::placeholder {
+  color: var(--rphp-text-muted, #8b8880);
+  font-style: italic;
+}
+
+/* Style Panel - light surface card (Verso popover) */
 .TextHighlight__style-panel {
-  margin-top: 4px;
-  background: rgba(0, 0, 0, 0.9);
-  border-radius: 6px;
-  padding: 8px;
-  min-width: 180px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  margin-top: 6px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  padding: 12px;
+  min-width: 200px;
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
 }
 
 .TextHighlight__style-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .TextHighlight__style-row:last-child {
@@ -93,11 +219,12 @@
 }
 
 .TextHighlight__style-row label {
-  color: #ccc;
-  font-size: 11px;
+  color: var(--rphp-text-muted, #8b8880);
+  font-size: 10px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-right: 8px;
+  letter-spacing: 0.8px;
+  margin-right: 10px;
 }
 
 /* Style type buttons (highlight, underline, strikethrough) */
@@ -113,71 +240,74 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  background: transparent;
-  border: 1px solid #666;
-  border-radius: 4px;
+  background: var(--rphp-surface-alt, #f4f2ee);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-sm, 6px);
   cursor: pointer;
-  color: #f5f5f5;
-  transition: all 0.2s;
+  color: var(--rphp-text-secondary, #57544d);
+  transition: all 0.15s;
 }
 
 .TextHighlight__style-type-button:hover {
-  border-color: #b958ff;
+  border-color: var(--rphp-accent, #5b50e6);
+  color: var(--rphp-accent, #5b50e6);
 }
 
 .TextHighlight__style-type-button.active {
-  color: #b958ff;
-  border-color: #b958ff;
-  background: rgba(185, 88, 255, 0.2);
+  color: var(--rphp-accent, #5b50e6);
+  border-color: var(--rphp-accent, #5b50e6);
+  background: var(--rphp-accent-soft, #eceaf9);
 }
 
-/* Color options */
-.TextHighlight__color-options {
+/* Color dropdown menu - same slot/positioning as the style panel */
+.TextHighlight__color-menu {
+  margin-top: 6px;
+  width: 180px;
+  background: var(--rphp-surface, #ffffff);
+  border: 1px solid var(--rphp-border, #e6e2da);
+  border-radius: var(--rphp-radius-lg, 12px);
+  box-shadow: var(--rphp-shadow-lg, 0 8px 24px -6px rgba(28, 27, 24, 0.22));
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.TextHighlight__color-menu-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.TextHighlight__color-presets {
-  display: flex;
-  gap: 4px;
-}
-
-.TextHighlight__color-preset {
-  width: 18px;
-  height: 18px;
-  border: 2px solid transparent;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s;
-  padding: 0;
-}
-
-.TextHighlight__color-preset:hover {
-  transform: scale(1.15);
-}
-
-.TextHighlight__color-preset.active {
-  border-color: #b958ff;
-}
-
-.TextHighlight__color-options input[type="color"] {
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
   background: transparent;
+  border-radius: var(--rphp-radius-sm, 6px);
+  cursor: pointer;
+  color: var(--rphp-text, #1c1b18);
+  font-size: 13px;
+  text-align: left;
 }
 
-.TextHighlight__color-options input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
+.TextHighlight__color-menu-item:hover {
+  background: var(--rphp-surface-alt, #f4f2ee);
 }
 
-.TextHighlight__color-options input[type="color"]::-webkit-color-swatch {
-  border: 1px solid #666;
-  border-radius: 4px;
+.TextHighlight__color-menu-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--rphp-border, #e6e2da);
+  flex-shrink: 0;
+}
+
+.TextHighlight__color-menu-label {
+  flex: 1;
+}
+
+.TextHighlight__color-menu-check {
+  display: flex;
+  color: var(--rphp-accent, #5b50e6);
+  flex-shrink: 0;
 }
 
 /* Underline style */

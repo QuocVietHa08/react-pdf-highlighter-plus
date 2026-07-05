@@ -642,16 +642,17 @@ export const PdfHighlighter = ({
     }),
   );
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  // Last observed container size. Survives listener-effect re-runs so the
-  // fresh observer's mandatory initial callback can be told apart from a real
-  // resize (consumers passing inline props re-run that effect every render).
-  const lastContainerSizeRef = useRef<{ w: number; h: number } | null>(null);
   const renderRetryTimeoutsRef = useRef<Array<ReturnType<typeof setTimeout>>>(
     [],
   );
   const resumeScrollAwayTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  // The "is the auto-scroll-to-highlight animation still settling" probe
+  // listener — see resumeScrollAwayListenerAfterNavigation. Kept in a ref
+  // (not a per-call local) purely so the unmount/effect-cleanup below can
+  // always remove it, even if the component unmounts mid quiet-period.
+  const settleScrollListenerRef = useRef<(() => void) | null>(null);
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null);
   const viewerRef = useRef<InstanceType<typeof PDFViewer> | null>(null);
   // Count of currently-selected highlights (toolbar open) — used to suppress
@@ -772,20 +773,28 @@ export const PdfHighlighter = ({
   useLayoutEffect(() => {
     if (!containerNodeRef.current) return;
 
-    // Re-apply the scale ONLY on real container size changes ("auto"/"page-
-    // width" must re-fit). ResizeObserver fires an initial callback on every
-    // observe() — and this effect re-binds whenever its deps change identity —
-    // so without the size check that initial callback force-set the scale
-    // after every consumer render (the second re-raster per zoom commit).
-    resizeObserverRef.current = new ResizeObserver((entries) => {
-      const rect = entries[entries.length - 1]?.contentRect;
-      if (!rect) return;
-      const last = lastContainerSizeRef.current;
-      if (last && last.w === rect.width && last.h === rect.height) return;
-      lastContainerSizeRef.current = { w: rect.width, h: rect.height };
-      // Skip the very first measurement too — initial scale is applied by the
-      // pagesinit handler below, not by observation start.
-      if (last) handleScaleValueRef.current();
+    // Re-apply the scale ("auto"/"page-width" must re-fit) on every
+    // ResizeObserver firing, unconditionally — do NOT try to dedupe by
+    // comparing to the last-seen container size. In some consumer layouts
+    // (e.g. a sidebar/header still resolving) the container measures 0x0 at
+    // every firing up through pagesinit, and no *subsequent* distinct
+    // ResizeObserver notification ever arrives once it reaches its real size
+    // (observed empirically — likely coalesced into the same batch as an
+    // early measurement). A size-based dedupe here permanently missed the one
+    // callback that would have corrected the scale, so PDF.js's internal
+    // scale never changed from its premature value and — since it no-ops a
+    // same-valued assignment — never queued a render: pages stayed blank
+    // forever. This effect also re-runs on nearly every consumer render
+    // (its deps include `highlights`/`selectionTip`/`onSelectionFinished`,
+    // which are commonly fresh identities each render), recreating the
+    // observer and firing its mandatory initial callback again — relied on
+    // here as the retry mechanism until one lands after real layout. The
+    // wasted-re-raster case this used to guard against (the rounded-value
+    // round-trip after a wheel-zoom commit) is instead caught by the
+    // scale-proximity tolerance check inside handleScaleValue itself, which
+    // is unrelated to container size and doesn't have this failure mode.
+    resizeObserverRef.current = new ResizeObserver(() => {
+      handleScaleValueRef.current();
     });
     resizeObserverRef.current.observe(containerNodeRef.current);
 
@@ -799,6 +808,22 @@ export const PdfHighlighter = ({
     eventBusRef.current.on("textlayerrendered", handlePageRendered);
     eventBusRef.current.on("pagerendered", handlePageRendered);
     eventBusRef.current.on("pagesinit", handleScaleValue);
+
+    // Self-healing re-arm: this effect's deps include `highlights` and
+    // `selectionTip`/`onSelectionFinished`, which are commonly fresh
+    // identities on every consumer render — and a consumer re-renders on
+    // essentially every scroll tick during a scrollToHighlight navigation
+    // (e.g. an onPageChange callback updating state as pages are crossed).
+    // Each such re-render tears down and rebuilds this WHOLE effect,
+    // cancelling whatever settle-detection scrollToHighlight had in flight
+    // with no recovery — the away-listener (old fixed-delay version or the
+    // debounced one below) silently never gets armed, permanently stranding
+    // the "scrolled to" ring. If a highlight is still marked current when
+    // this effect (re-)runs, re-arm detection from scratch so it survives
+    // any number of teardown/rebuild cycles mid-navigation.
+    if (scrolledToHighlightIdRef.current) {
+      resumeScrollAwayListenerAfterNavigation();
+    }
     doc.addEventListener("keydown", handleKeyDown);
     doc.addEventListener("copy", handleCopy, true);
 
@@ -816,6 +841,13 @@ export const PdfHighlighter = ({
       if (resumeScrollAwayTimeoutRef.current) {
         clearTimeout(resumeScrollAwayTimeoutRef.current);
         resumeScrollAwayTimeoutRef.current = null;
+      }
+      if (settleScrollListenerRef.current) {
+        viewerRef.current?.container.removeEventListener(
+          "scroll",
+          settleScrollListenerRef.current,
+        );
+        settleScrollListenerRef.current = null;
       }
     };
   }, [selectionTip, highlights, onSelectionFinished]);
@@ -1488,14 +1520,45 @@ export const PdfHighlighter = ({
 
     if (resumeScrollAwayTimeoutRef.current) {
       clearTimeout(resumeScrollAwayTimeoutRef.current);
+      resumeScrollAwayTimeoutRef.current = null;
+    }
+    if (settleScrollListenerRef.current) {
+      container.removeEventListener("scroll", settleScrollListenerRef.current);
+      settleScrollListenerRef.current = null;
     }
 
-    resumeScrollAwayTimeoutRef.current = setTimeout(() => {
-      container.addEventListener("scroll", handleScroll, {
-        once: true,
-      });
-      resumeScrollAwayTimeoutRef.current = null;
-    }, 1200);
+    // scrollToHighlight's container.scrollTo({behavior:"smooth"}) has no
+    // fixed duration — browsers scale it with scroll distance, so a highlight
+    // far from the current view can still be mid-animation well past any
+    // fixed guess. The previous code waited a flat 1200ms then armed a
+    // ONE-TIME "scroll" listener as the away-detector; for a longer-than-1200ms
+    // animation, that listener fired on a spurious tail-tick of the STILL-
+    // RUNNING auto-scroll rather than a real user scroll, consumed itself
+    // (`{once:true}`), and was never re-armed — permanently stranding the
+    // "scrolled to" ring/highlight-list-sync until the next navigation
+    // (nothing else ever clears scrolledToHighlightIdRef — see handleScroll).
+    // Fix: don't guess a duration at all. Watch for genuine quiet — keep
+    // pushing out a short timer on every scroll tick; only once ticks stop
+    // for QUIET_MS do we consider the auto-scroll actually settled, and THEN
+    // arm the real one-time away-listener for the next (genuine) scroll.
+    const QUIET_MS = 150;
+    const onSettleTick = () => {
+      if (resumeScrollAwayTimeoutRef.current) {
+        clearTimeout(resumeScrollAwayTimeoutRef.current);
+      }
+      resumeScrollAwayTimeoutRef.current = setTimeout(() => {
+        container.removeEventListener("scroll", onSettleTick);
+        settleScrollListenerRef.current = null;
+        container.addEventListener("scroll", handleScroll, { once: true });
+        resumeScrollAwayTimeoutRef.current = null;
+      }, QUIET_MS);
+    };
+
+    settleScrollListenerRef.current = onSettleTick;
+    container.addEventListener("scroll", onSettleTick);
+    // Seed the timer immediately too, in case the highlight was already in
+    // view and scrollTo() produced no scroll events to trigger onSettleTick.
+    onSettleTick();
   };
 
   // Utils
